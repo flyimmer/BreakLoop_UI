@@ -1114,7 +1114,7 @@ export default function App() {
   const [showAltScheduler, setShowAltScheduler] = useState(false);
   const [altPlanDraft, setAltPlanDraft] = useState(null);
   const [proactiveState, setProactiveState] = useState(null);
-  const [altTab, setAltTab] = useState("mylist");
+  const [altTab, setAltTab] = useState("discover");
   const [actionTimer, setActionTimer] = useState(0);
 
   // AI STATE
@@ -1681,7 +1681,7 @@ export default function App() {
     resetNewAltForm();
     resetAIInspiredForm();
     setAltPage(0);
-    setAltTab("mylist");
+    setAltTab("discover");
   };
 
   const handleStartQuickTask = (app) => {
@@ -1767,19 +1767,7 @@ export default function App() {
       socialContext = `Nearby friends (within 50km): ${friendList}. Consider suggesting activities that could involve joining them if appropriate.`;
     }
 
-    // 4. USER VALUES/GOALS
-    let valuesContext = "";
-    if (selectedValues && selectedValues.length > 0) {
-      const valueLabels = selectedValues
-        .map((id) => VALUE_CARDS.find((v) => v.id === id)?.label)
-        .filter(Boolean)
-        .join(", ");
-      if (valueLabels) {
-        valuesContext = `User's core values/goals: ${valueLabels}. Prioritize activities that align with these values.`;
-      }
-    }
-
-    // 5. USER'S SAVED ALTERNATIVES & HISTORY
+    // 4. USER'S SAVED ALTERNATIVES & HISTORY
     let preferencesContext = "";
     const savedAlts = savedAlternativeIds
       .map((id) => {
@@ -1827,6 +1815,18 @@ export default function App() {
     // 8. TARGET APP
     const targetAppContext = targetApp ? targetApp.name : "";
 
+    // 9. USER VALUES/GOALS (last priority)
+    let valuesContext = "";
+    if (selectedValues && selectedValues.length > 0) {
+      const valueLabels = selectedValues
+        .map((id) => VALUE_CARDS.find((v) => v.id === id)?.label)
+        .filter(Boolean)
+        .join(", ");
+      if (valueLabels) {
+        valuesContext = `User's core values/goals: ${valueLabels}. Prioritize activities that align with these values.`;
+      }
+    }
+
     // Build comprehensive prompt with priority order
     const prompt = `Generate 3 specific, actionable alternative activities for a user that can be started IMMEDIATELY with minimal preparation.
 
@@ -1834,14 +1834,19 @@ PRIMARY CONTEXT:
 - Emotional state: ${causeLabels || "not specified"}
 - Location: ${locationContext}
 ${socialContext ? `- ${socialContext}` : ""}
-${valuesContext ? `- ${valuesContext}` : ""}
 ${preferencesContext ? `- ${preferencesContext}` : ""}
 - Time: ${timeContext} (${timeOfDay})
 - Weather: ${weatherContext}
 ${targetAppContext ? `- Triggered by opening: ${targetAppContext}` : ""}
+${valuesContext ? `- ${valuesContext}` : ""}
 
 CRITICAL REQUIREMENTS:
 - Activities MUST be easy to start RIGHT NOW (within 1-2 minutes)
+- Activities MUST be appropriate for the current time of day (${timeOfDay} at ${timeContext})
+  * If it's night (21:00-04:59): NO outdoor activities, NO morning sun activities, suggest calm/rest activities
+  * If it's morning (05:00-11:59): Morning-appropriate activities are fine
+  * If it's afternoon (12:00-16:59): Afternoon-appropriate activities are fine
+  * If it's evening (17:00-20:59): Evening-appropriate activities are fine
 - NO activities requiring advance planning, scheduling, or coordination
 - NO activities requiring travel to specific venues (cafes, theaters, gyms)
 - NO activities requiring booking or appointments
@@ -1849,7 +1854,7 @@ CRITICAL REQUIREMENTS:
 - Activities should require minimal setup and preparation
 
 Return a JSON array of objects with keys: 'title' (short string), 'desc' (1 sentence), 'duration' (e.g. '15m'), 'actions' (array of 3 short steps that can be done immediately), 'type' (social/calm/creative/active/productive/rest).
-Prioritize activities that address the emotional state first, then consider location, time of day, weather, and user preferences.
+Prioritize activities that address the emotional state first, then ensure they are appropriate for the time of day, then consider location, weather, and user preferences.
 
 Good Examples (immediately actionable):
 - [{"title": "5-Minute Stretch", "desc": "Release tension with gentle stretches.", "duration": "5m", "actions": ["Stand up", "Reach for the sky", "Touch your toes"], "type": "active"}]
@@ -2704,19 +2709,6 @@ Example: [{"title": "Watch 'Past Lives' at Cinema München", "desc": "Catch the 
               <div className="flex bg-white/10 p-1 rounded-xl">
                 <button
                   onClick={() => {
-                    setAltTab("mylist");
-                    setAltPage(0);
-                  }}
-                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${
-                    altTab === "mylist"
-                      ? "bg-white text-slate-900"
-                      : "text-white/50 hover:text-white"
-                  }`}
-                >
-                  My List
-                </button>
-                <button
-                  onClick={() => {
                     setAltTab("discover");
                     setAltPage(0);
                   }}
@@ -2740,6 +2732,19 @@ Example: [{"title": "Watch 'Past Lives' at Cinema München", "desc": "Catch the 
                   }`}
                 >
                   <Sparkles size={12} /> AI For You
+                </button>
+                <button
+                  onClick={() => {
+                    setAltTab("mylist");
+                    setAltPage(0);
+                  }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${
+                    altTab === "mylist"
+                      ? "bg-white text-slate-900"
+                      : "text-white/50 hover:text-white"
+                  }`}
+                >
+                  My List
                 </button>
               </div>
             </div>
