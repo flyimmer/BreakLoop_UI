@@ -191,9 +191,56 @@ Reference: `why-instagram.png`
 Regulation Anchor (centered, non-decisional)  
 Reference: `countdown.png`
 
+### Quick Task Confirmation (Exception Gate)
+
+This screen represents an **explicit exception path** within the conscious
+interruption flow.
+
+- **Gravity:** Grounded Transition (exception path)
+- **User intent:** Bypass the full conscious process for an urgent need
+- **Behavioral posture:** Allow, but do not encourage
+
+Rules:
+- The screen must be **visually constrained** (dialog or compact sheet)
+- It must feel **slightly heavy**, not fast or convenient
+- The Quick Task action must not feel easier or more attractive than the
+  conscious process
+- No reward framing, no celebratory language, no visual delight
+- Both options must be clearly available and honest
+
+The purpose of this screen is to introduce **ethical friction**, not efficiency.
+
+**Important:**  
+Exception paths must be visually muted and must never feel like the preferred
+choice.
+
 ### Alternatives — Discover
 Grounded Transition with Heavy Override  
 Reference: `alternatives-discover.png`
+
+### Alternatives — AI For You (Assisted Reflection)
+
+Although this tab shares the Alternatives screen structure, it represents a
+distinct **user intent** and therefore applies a different gravity treatment.
+
+- **Gravity:** Reflective Float (assisted sourcing)
+- **User intent:** Exploration without commitment
+- **Behavioral posture:** Suggest, do not steer
+
+Rules:
+- “Plan this activity” must be clearly recognizable as an action
+- It must feel **optional**, not directional
+- Use a **tertiary / ghost affordance**
+- No urgency cues, no primacy, no visual “best choice”
+- Cards should feel safe to browse and safe to leave
+
+This tab must feel like a shelf of ideas, not a recommendation engine.
+
+**Important:**  
+Although the component is shared with other tabs, gravity is applied **per tab
+based on intent**, not uniformly across the screen.
+
+
 
 ### Alternatives — My List (Assisted Reflection)
 

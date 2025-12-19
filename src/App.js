@@ -3145,7 +3145,9 @@ Example: [{"title": "Watch 'Past Lives' at Cinema München", "desc": "Catch the 
                           setSelectedAlternative(alt);
                           setInterventionState("action");
                         }}
-                        className="bg-white rounded-xl p-4 flex flex-col gap-2 relative group cursor-pointer hover:scale-[1.02] transition-transform"
+                        className={`bg-white rounded-xl p-4 flex flex-col gap-2 relative group cursor-pointer transition-transform ${
+                          altTab === "ai" ? "" : "hover:scale-[1.02]"
+                        }`}
                       >
                         {/* BADGES ROW */}
                         <div className="flex justify-between items-start mb-1">
@@ -3242,7 +3244,11 @@ Example: [{"title": "Watch 'Past Lives' at Cinema München", "desc": "Catch the 
                               e.preventDefault();
                               handleOpenAltScheduler(alt);
                             }}
-                            className="text-[11px] font-bold text-blue-600 hover:underline relative z-10"
+                            className={`text-[11px] relative z-10 ${
+                              altTab === "ai"
+                                ? "text-slate-500 hover:text-slate-700"
+                                : "font-bold text-blue-600 hover:underline"
+                            }`}
                           >
                             Plan this activity
                           </button>
@@ -3907,8 +3913,8 @@ function QuickTaskDialog({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center p-4">
-      <div className="bg-white w-full max-w-md rounded-3xl shadow-xl p-6 space-y-4 animate-in slide-in-from-bottom">
+    <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-sm rounded-2xl shadow-lg p-5 space-y-4">
         <div className="flex justify-between items-start gap-3">
           <div>
             <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">
@@ -3930,18 +3936,18 @@ function QuickTaskDialog({
             <X size={16} />
           </button>
         </div>
-        <div className="space-y-2">
+        <div className="space-y-3">
           <button
             onClick={onQuickTask}
             disabled={remainingUses <= 0}
-            className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:bg-slate-200 disabled:text-slate-400"
+            className="w-full bg-slate-600 text-white font-medium py-3 rounded-xl flex items-center justify-center gap-2 disabled:bg-slate-200 disabled:text-slate-400"
           >
             <Zap size={16} /> Quick Task (
             {formatQuickTaskDuration(durationMinutes, { long: true })})
           </button>
           <button
             onClick={onConscious}
-            className="w-full border border-slate-200 text-slate-700 font-bold py-3 rounded-xl flex items-center justify-center gap-2 bg-white"
+            className="w-full border border-slate-200 text-slate-700 font-medium py-3 rounded-xl flex items-center justify-center gap-2 bg-white"
           >
             <Brain size={16} /> Go through conscious process
           </button>
