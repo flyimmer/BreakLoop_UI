@@ -19,11 +19,15 @@ export async function generateActivitySuggestions(inputs) {
   const { topic, location, timePreference, date, participantsDescription } = inputs;
 
   // Build the prompt for Gemini
+  const timeContext = timePreference === "Now" 
+    ? `right now (current time: ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })})` 
+    : (timePreference || "any time");
+  
   const prompt = `You are a mindful activity planning assistant. Generate 3 diverse, personalized activity suggestions based on the following user preferences:
 
 Topic/Interest: ${topic || "general wellness"}
 Location: ${location || "flexible location"}
-Time of Day: ${timePreference || "any time"}
+Time of Day: ${timeContext}
 Date: ${date || "today"}
 Participants Description: ${participantsDescription || "no specific participant preferences"}
 
@@ -92,6 +96,14 @@ IMPORTANT: Return ONLY the JSON array, no markdown formatting, no code blocks, n
 
 // Helper function to get default time based on preference
 function getDefaultTime(timePreference, index) {
+  // If "Now" is selected, return current time
+  if (timePreference === "Now") {
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  }
+
   const baseTimes = {
     Morning: ["08:00", "09:30", "07:00"],
     Afternoon: ["14:00", "15:30", "16:00"],
@@ -186,6 +198,13 @@ export default function PlanActivityModal({
   const canSubmitSoloManual = manualForm.title && manualForm.date && manualForm.time;
   const canSubmitGroup = groupForm.title && groupForm.date && groupForm.time;
 
+  // Check if selected date is today
+  const isToday = React.useMemo(() => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    return aiForm.date === todayStr;
+  }, [aiForm.date]);
+
   // Populate form when editing
   React.useEffect(() => {
     if (editActivity && isOpen) {
@@ -229,7 +248,14 @@ export default function PlanActivityModal({
     }
   }, [editActivity, isOpen, defaultDate]);
 
-  const timeOptions = ["Morning", "Afternoon", "Evening"];
+  // Dynamic time options - add "Now" if selected date is today
+  const timeOptions = React.useMemo(() => {
+    const baseOptions = ["Morning", "Afternoon", "Evening"];
+    if (isToday) {
+      return ["Now", ...baseOptions];
+    }
+    return baseOptions;
+  }, [isToday]);
 
   const handleGenerate = async () => {
     setError("");
