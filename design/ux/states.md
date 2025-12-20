@@ -591,6 +591,7 @@ Modals render on top of current context. Only one modal active at a time (unless
      - "Back to form" resets suggestions
    - **Manual** (`soloMode: "manual"`)
      - Direct form: title, description, date, time, end time, steps, location
+     - Shows "← Back to suggestions" button when `cameFromSuggestions: true`
 
 2. **Group** (`mode: "group"`)
    - Form: title, description, date, time, end time, location
@@ -601,29 +602,48 @@ Modals render on top of current context. Only one modal active at a time (unless
 - `isEditMode: true` when `editActivity` prop provided
 - Pre-fills form with existing activity data
 - Determines solo/group mode automatically
+- Forces `soloMode: "manual"` for solo activities (no AI suggestions in edit mode)
 
 **State Variables:**
-- `suggestions: []` - AI-generated suggestions
+- `mode: "solo" | "group"` - Activity type
+- `soloMode: "ai" | "manual"` - Solo sub-mode (preserved across modal close/reopen)
+- `suggestions: []` - AI-generated suggestions (preserved when editing suggestion)
+- `cameFromSuggestions: boolean` - Tracks if user navigated from AI suggestions to manual edit
 - `isLoading: boolean` - Generation in progress
 - `error: string` - Error message if generation fails
+- `isGettingLocation: boolean` - Location detection in progress
 
 **Validation:**
 - Solo manual: Requires title, date, time
 - Group: Requires title, date, time
 
 **Transitions:**
-- Save/Create → Closes modal → Updates `upcomingActivities`
-- Close → Resets all form state
-- Edit → Pre-fills form with existing data
+- Save/Create → Closes modal → Updates `upcomingActivities` → Resets all state
+- Close (from AI suggestions) → Closes modal → Resets all state
+- Close (from manual edit with `cameFromSuggestions: true`) → Returns to AI suggestions view
+- Close (from manual edit without suggestions) → Closes modal → Resets all state
+- Edit suggestion → Switches to manual mode → Sets `cameFromSuggestions: true` → Preserves suggestions
+- Back to suggestions → Returns to AI suggestions view → Clears manual form
+- Edit activity → Pre-fills form with existing data
 
 **Triggers:**
 - "Plan activity" button from community tab
 - "Edit activity" from activity details modal
 
+**UI/Scrolling:**
+- Modal container: `max-h-[90vh]` with backdrop scrolling
+- Header: Fixed at top with close button always accessible
+- Content: Scrollable independently from header
+- Close button (X): Always visible, positioned absolutely at top-right
+
 **Edge Cases:**
-- Form state resets on close
+- Form data resets on modal close (except `soloMode` which persists)
+- `soloMode` persists across close/reopen to remember user's last selection
+- Suggestions preserved when clicking "Edit" on suggestion card
+- `cameFromSuggestions` flag enables conditional navigation (back vs. close)
 - Edit mode determines mode from activity data
-- AI suggestions include location and context
+- Edit mode forces manual mode for solo activities (no AI toggle)
+- AI suggestions include location and context from form inputs
 
 ---
 
@@ -944,12 +964,25 @@ launcher ↔ app-{id}
 
 ### Modal State Variables
 - `showPlanModal: boolean`
+- `editActivity: object | null` - Activity being edited (passed to PlanActivityModal)
 - `showAltScheduler: boolean`
 - `selectedActivity: object | null`
 - `viewingFriend: object | null`
 - `isAddingFriend: boolean`
 - `messagingBuddy: object | null`
 - `isEditingApps: boolean`
+
+### Plan Activity Modal Internal State
+- `mode: "solo" | "group"` - Activity type selection
+- `soloMode: "ai" | "manual"` - Solo sub-mode (persists across modal close/reopen)
+- `suggestions: object[]` - AI-generated activity suggestions
+- `cameFromSuggestions: boolean` - Tracks navigation from AI suggestions to manual edit
+- `isLoading: boolean` - AI generation in progress
+- `error: string` - Error message for failed AI generation
+- `isGettingLocation: boolean` - Location detection in progress
+- `aiForm: object` - AI suggestion form inputs (topic, location, timePreference, date, participants)
+- `manualForm: object` - Manual form inputs (title, description, date, time, endTime, steps, location)
+- `groupForm: object` - Group form inputs (title, description, date, time, endTime, location, maxParticipants, visibility, allowAutoJoin)
 
 ### Activity State Variables
 - `upcomingActivities: object[]`

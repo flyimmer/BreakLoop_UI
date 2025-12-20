@@ -898,6 +898,7 @@ This document defines user journeys through the BreakLoop app by sequencing stat
    - User Action: Tap "Edit" button on suggestion card
    - State Updates:
      - `soloMode: "manual"`
+     - `cameFromSuggestions: true` (enables back navigation)
      - Pre-fills manual form with suggestion data:
        - Title: From suggestion
        - Description: From suggestion
@@ -905,15 +906,26 @@ This document defines user journeys through the BreakLoop app by sequencing stat
        - Time: From suggestion
        - End time: Calculated from duration
        - Location: From suggestion
-     - `suggestions: []` (clears suggestions)
+     - `suggestions` preserved (NOT cleared)
    - Display: Manual form with pre-filled values
+   - UI: "← Back to suggestions" button appears at top of form
 
-9. **Modify and Save**
-   - User Action: Edit fields, then tap "Save" or "Create"
+9. **Navigate Back to Suggestions (Optional)**
+   - User Action: Tap "← Back to suggestions" button OR tap close button (X)
+   - State Updates:
+     - `soloMode: "ai"`
+     - `cameFromSuggestions: false`
+     - Clears manual form
+   - Display: Returns to AI suggestions view with 3 suggestion cards
+   - Note: User can continue editing other suggestions or close modal
+
+10. **Modify and Save**
+   - User Action: Edit fields, then tap "Save to My upcoming" button
    - Validation: Requires title, date, time
    - State Updates:
      - Adds to `upcomingActivities` with `status: "confirmed"`
      - `showPlanModal: false`
+     - `cameFromSuggestions: false`
    - Display: Toast notification "Activity planned"
    - Transition: → Modal closes
 
@@ -945,16 +957,21 @@ This document defines user journeys through the BreakLoop app by sequencing stat
 **Exit Points:**
 - Activity accepted → added to My Upcoming
 - Activity saved after editing → added to My Upcoming
-- Modal closed → returns to Community tab (no activity saved)
+- Modal closed from AI suggestions → returns to Community tab (no activity saved)
+- Modal closed from Manual edit (with suggestions) → returns to AI suggestions view
+- Modal closed from Manual edit (without suggestions) → returns to Community tab
 - Back to form → clears suggestions, stays in modal
+- Back to suggestions → returns to AI suggestions view, preserves suggestions
 
 **Mobile Considerations:**
 - Form inputs use mobile-native keyboards (text, date pickers, time pickers)
 - Suggestion cards scrollable horizontally on small screens
 - Loading state prevents multiple API calls
-- Form state resets on modal close
-- Android: Back button closes modal
-- iOS: Swipe-down gesture closes modal
+- Form state resets on modal close (except `soloMode` and suggestions when navigating back)
+- Modal scrolling: Backdrop is scrollable, close button (X) always accessible at top
+- Modal height: Limited to 90vh, content scrolls independently
+- Android: Back button closes modal or returns to suggestions (context-aware)
+- iOS: Swipe-down gesture closes modal or returns to suggestions (context-aware)
 
 ---
 
@@ -1064,8 +1081,10 @@ This document defines user journeys through the BreakLoop app by sequencing stat
 
 5. **Plan Activity Modal (Edit Mode)**
    - State: `showPlanModal: true` + `isEditMode: true`
+   - Display: Manual edit form only (no AI suggestion/manual toggle in edit mode)
    - Pre-filled Form:
      - Mode: Determined from activity data (solo/group)
+     - Solo Mode: Automatically set to `"manual"` (no AI suggestions in edit mode)
      - Title: From `editActivity.title`
      - Description: From `editActivity.description`
      - Date: Parsed from `editActivity.dateLabel` via `parseFormattedDate()`
@@ -1074,6 +1093,7 @@ This document defines user journeys through the BreakLoop app by sequencing stat
      - Location: From `editActivity.location`
      - Steps: From `editActivity.steps` (if solo)
      - Visibility: From `editActivity.visibility` (if group)
+   - Note: No "← Back to suggestions" button in edit mode (no suggestions to return to)
 
 6. **Parse Time Fields**
    - Function: `parseTimeRange(editActivity.time)`

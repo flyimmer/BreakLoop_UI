@@ -220,23 +220,36 @@ This document lists all concrete mobile screens required for the BreakLoop app, 
 ### 8.1 Plan Activity Modal
 - **State:** `showPlanModal: true`
 - **Description:** Create or edit activity
+- **UI Structure:**
+  - Fixed header with title and close button (X) - always visible
+  - Scrollable content area (max-height: 90vh)
+  - Close button always accessible at top-right
 - **Modes:**
-  - **Mode Selection:** Solo / Group buttons
+  - **Mode Selection:** Solo / Group buttons (hidden in edit mode)
   - **Solo - AI Suggestion Mode:**
+    - Sub-mode toggle: "AI suggestion" / "Manual edit" buttons
     - Form: topic, location, time preference, date, participants description
     - "Generate suggestions" button
     - Loading state
     - 3 suggestion cards with Accept/Edit/Save buttons each
-    - "Back to form" button
+    - "Back to form" button (clears suggestions, returns to input form)
   - **Solo - Manual Mode:**
+    - Sub-mode toggle: "AI suggestion" / "Manual edit" buttons (hidden in edit mode)
+    - "← Back to suggestions" button (shown when navigated from AI suggestions)
     - Form: title, description, date, start time, end time, steps, location
-    - Save button
+    - "Save to My upcoming" button
   - **Group Mode:**
     - Form: title, description, date, start time, end time, location
     - Visibility selector (private/friends/public)
     - Max participants field
     - Allow auto-join toggle
-    - Create & Publish button
+    - "Create & Publish" button
+- **Edit Mode:**
+  - No mode selection buttons (determined automatically)
+  - No AI suggestion/manual toggle (always manual)
+  - No "← Back to suggestions" button
+  - Pre-filled form with existing activity data
+  - Button text: "Update activity" instead of "Save" or "Create"
 - **Edit Mode:**
   - Pre-filled form based on existing activity
   - Update/Save button
