@@ -9,6 +9,8 @@ import {
   Users,
   User,
   X,
+  Lock,
+  Globe,
 } from "lucide-react";
 import ActivitySuggestionCard from "./ActivitySuggestionCard";
 import { callGemini } from "../utils/gemini";
@@ -340,8 +342,22 @@ export default function PlanActivityModal({
   defaultDate,
   editActivity,
 }) {
-  const [mode, setMode] = useState("solo");
-  const [soloMode, setSoloMode] = useState("ai");
+  // Unified state management
+  const [mode, setMode] = useState("ai"); // 'ai' | 'manual'
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    date: defaultDate,
+    time: "",
+    endTime: "",
+    location: "",
+    visibility: "private", // 'private' | 'friends' | 'public'
+    maxParticipants: 6,
+    allowAutoJoin: false,
+    steps: "",
+  });
+  
+  // AI suggestion form inputs
   const [aiForm, setAiForm] = useState({
     date: defaultDate,
     timePreference: "",
@@ -349,36 +365,14 @@ export default function PlanActivityModal({
     location: "",
     participantsDescription: "",
   });
-  const [manualForm, setManualForm] = useState({
-    title: "",
-    description: "",
-    date: defaultDate,
-    time: "",
-    endTime: "",
-    steps: "",
-    location: "",
-  });
-  const [groupForm, setGroupForm] = useState({
-    title: "",
-    description: "",
-    date: defaultDate,
-    time: "",
-    endTime: "",
-    location: "",
-    maxParticipants: 6,
-    visibility: "friends",
-    allowAutoJoin: false,
-  });
+  
   const [suggestions, setSuggestions] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [isGettingLocation, setIsGettingLocation] = useState(false);
-  // Track if user came from AI suggestions (to enable back navigation)
-  const [cameFromSuggestions, setCameFromSuggestions] = useState(false);
 
   const isEditMode = !!editActivity;
-  const canSubmitSoloManual = manualForm.title && manualForm.date && manualForm.time;
-  const canSubmitGroup = groupForm.title && groupForm.date && groupForm.time;
+  const canSubmit = formData.title && formData.date && formData.time;
 
   // Check if selected date is today
   const isToday = React.useMemo(() => {
@@ -397,36 +391,28 @@ export default function PlanActivityModal({
       const timeStr = editActivity.time || "";
       const { start: parsedTime, end: parsedEndTime } = parseTimeRange(timeStr);
 
-      // Determine if this is a group or solo activity
-      const isGroup = editActivity.hostType === "public" || editActivity.visibility === "public" || editActivity.maxParticipants > 1;
-
-      if (isGroup) {
-        setMode("group");
-        setGroupForm({
-          title: editActivity.title || "",
-          description: editActivity.description || "",
-          date: isoDate,
-          time: parsedTime,
-          endTime: parsedEndTime || editActivity.endTime || "",
-          location: editActivity.location || "",
-          maxParticipants: editActivity.maxParticipants || 6,
-          visibility: editActivity.visibility || "friends",
-          allowAutoJoin: editActivity.allowAutoJoin || false,
-        });
-      } else {
-        setMode("solo");
-        setSoloMode("manual");
-        
-        setManualForm({
-          title: editActivity.title || "",
-          description: editActivity.description || "",
-          date: isoDate,
-          time: parsedTime,
-          endTime: parsedEndTime || editActivity.endTime || "",
-          steps: editActivity.steps || "",
-          location: editActivity.location || "",
-        });
+      // Determine visibility based on activity properties
+      let visibility = "private";
+      if (editActivity.visibility === "public") {
+        visibility = "public";
+      } else if (editActivity.visibility === "friends" || editActivity.maxParticipants > 1) {
+        visibility = "friends";
       }
+
+      // Always switch to manual mode for editing
+      setMode("manual");
+      setFormData({
+        title: editActivity.title || "",
+        description: editActivity.description || "",
+        date: isoDate,
+        time: parsedTime,
+        endTime: parsedEndTime || editActivity.endTime || "",
+        location: editActivity.location || "",
+        visibility: visibility,
+        maxParticipants: editActivity.maxParticipants || 6,
+        allowAutoJoin: editActivity.allowAutoJoin || false,
+        steps: editActivity.steps || "",
+      });
     }
   }, [editActivity, isOpen, defaultDate]);
 
@@ -515,10 +501,8 @@ export default function PlanActivityModal({
               if (locationString) {
                 if (targetForm === "ai") {
                   setAiForm((p) => ({ ...p, location: locationString }));
-                } else if (targetForm === "manual") {
-                  setManualForm((p) => ({ ...p, location: locationString }));
-                } else if (targetForm === "group") {
-                  setGroupForm((p) => ({ ...p, location: locationString }));
+                } else if (targetForm === "unified") {
+                  setFormData((p) => ({ ...p, location: locationString }));
                 }
               }
             }
@@ -548,55 +532,67 @@ export default function PlanActivityModal({
     topic: suggestion.topic || aiForm.topic,
   });
 
-  const handleSoloSave = () => {
-    if (soloMode === "manual" && canSubmitSoloManual) {
-      if (isEditMode) {
-        onUpdateActivity?.({
-          ...manualForm,
-          type: "solo",
-        });
-      } else {
-        onCreateSolo?.({
-          ...manualForm,
-          type: "solo",
-        });
-      }
-      // Reset form after save
-      resetModal();
-    }
-  };
+  const handleSave = () => {
+    if (!canSubmit) return;
+    
+    const activityData = {
+      title: formData.title,
+      description: formData.description,
+      date: formData.date,
+      time: formData.time,
+      endTime: formData.endTime,
+      location: formData.location,
+      steps: formData.steps,
+    };
 
-  const handleGroupSave = () => {
-    if (!canSubmitGroup) return;
     if (isEditMode) {
+      // Update existing activity
       onUpdateActivity?.({
-        ...groupForm,
-        type: "group",
+        ...activityData,
+        visibility: formData.visibility,
+        maxParticipants: formData.visibility === "private" ? 1 : formData.maxParticipants,
+        allowAutoJoin: formData.visibility === "private" ? false : formData.allowAutoJoin,
+        type: formData.visibility === "private" ? "solo" : "group",
       });
+      // Reset after update
+      resetModal();
     } else {
-      onCreateGroup?.({
-        ...groupForm,
-        type: "group",
-      });
+      // Create new activity
+      if (formData.visibility === "private") {
+        onCreateSolo?.({
+          ...activityData,
+          type: "solo",
+        });
+        // onCreateSolo handles modal closing via onComplete callback
+      } else {
+        onCreateGroup?.({
+          ...activityData,
+          visibility: formData.visibility,
+          maxParticipants: formData.maxParticipants,
+          allowAutoJoin: formData.allowAutoJoin,
+          type: "group",
+        });
+        // onCreateGroup (addGroupActivity) handles modal closing internally
+      }
     }
-    // Reset form after save
-    resetModal();
   };
 
   const resetModal = () => {
     setSuggestions([]);
     setError("");
     setIsLoading(false);
-    setCameFromSuggestions(false);
-    // Don't reset soloMode - preserve user's last selection (AI suggestion vs Manual edit)
-    setManualForm({
+    // Don't reset mode - preserve user's last selection (AI vs Manual)
+    setFormData({
       title: "",
       description: "",
       date: defaultDate,
       time: "",
       endTime: "",
-      steps: "",
       location: "",
+      visibility: "private",
+      maxParticipants: 6,
+      allowAutoJoin: false,
+      steps: "",
     });
     setAiForm({
       date: defaultDate,
@@ -605,33 +601,24 @@ export default function PlanActivityModal({
       location: "",
       participantsDescription: "",
     });
-    setGroupForm({
-      title: "",
-      description: "",
-      date: defaultDate,
-      time: "",
-      endTime: "",
-      location: "",
-      maxParticipants: 6,
-      visibility: "friends",
-      allowAutoJoin: false,
-    });
   };
 
   const handleClose = () => {
-    // If user is in manual mode and came from AI suggestions, go back to suggestions
-    if (soloMode === "manual" && cameFromSuggestions && suggestions.length > 0) {
-      setSoloMode("ai");
-      setCameFromSuggestions(false);
-      // Clear manual form but keep suggestions
-      setManualForm({
+    // If user is in manual mode and has suggestions, go back to AI view
+    if (mode === "manual" && suggestions.length > 0) {
+      setMode("ai");
+      // Clear form but keep suggestions
+      setFormData({
         title: "",
         description: "",
         date: defaultDate,
         time: "",
         endTime: "",
-        steps: "",
         location: "",
+        visibility: "private",
+        maxParticipants: 6,
+        allowAutoJoin: false,
+        steps: "",
       });
     } else {
       // Otherwise, close the modal completely
@@ -645,35 +632,9 @@ export default function PlanActivityModal({
     setError("");
   };
 
-  const soloForm = useMemo(
-    () => (
+  const aiSuggestionView = (
       <>
         {!isEditMode && (
-          <div className="flex items-center gap-2 mb-3">
-            <button
-              onClick={() => setSoloMode("ai")}
-              className={`text-xs font-bold px-3 py-2 rounded-xl border ${
-                soloMode === "ai"
-                  ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-                  : "bg-white text-slate-600 border-slate-200"
-              }`}
-            >
-              AI suggestion
-            </button>
-            <button
-              onClick={() => setSoloMode("manual")}
-              className={`text-xs font-bold px-3 py-2 rounded-xl border ${
-                soloMode === "manual"
-                  ? "bg-blue-50 text-blue-700 border-blue-100"
-                  : "bg-white text-slate-600 border-slate-200"
-              }`}
-            >
-              Manual edit
-            </button>
-          </div>
-        )}
-
-        {soloMode === "ai" ? (
           <div className="space-y-3">
             {!suggestions.length && (
               <>
@@ -803,19 +764,17 @@ export default function PlanActivityModal({
                     suggestion={suggestion}
                     onEdit={(s) => {
                       const contextualSuggestion = withContext(s);
-                      setManualForm((prev) => ({
+                      setFormData((prev) => ({
                         ...prev,
                         title: contextualSuggestion.title || "",
                         description: contextualSuggestion.description || "",
                         time: contextualSuggestion.time || "",
                         date: contextualSuggestion.date || aiForm.date,
                         location: contextualSuggestion.location || "",
-                        duration: contextualSuggestion.duration || "",
                         steps: "",
                         endTime: "",
                       }));
-                      setSoloMode("manual");
-                      setCameFromSuggestions(true);
+                      setMode("manual");
                       // Keep suggestions so user can go back
                     }}
                     onSave={(s) => {
@@ -827,195 +786,80 @@ export default function PlanActivityModal({
               </div>
             ) : null}
           </div>
-        ) : (
-          <div className="space-y-3">
-            {/* Show back button if user came from AI suggestions */}
-            {cameFromSuggestions && suggestions.length > 0 && (
-              <button
-                onClick={() => {
-                  setSoloMode("ai");
-                  setCameFromSuggestions(false);
-                  // Clear manual form
-                  setManualForm({
-                    title: "",
-                    description: "",
-                    date: defaultDate,
-                    time: "",
-                    endTime: "",
-                    steps: "",
-                    location: "",
-                  });
-                }}
-                className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
-              >
-                ← Back to suggestions
-              </button>
-            )}
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Title
-              </label>
-              <input
-                value={manualForm.title}
-                onChange={(e) =>
-                  setManualForm((p) => ({ ...p, title: e.target.value }))
-                }
-                className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Description (optional)
-              </label>
-              <textarea
-                value={manualForm.description}
-                onChange={(e) =>
-                  setManualForm((p) => ({ ...p, description: e.target.value }))
-                }
-                className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 min-h-[80px]"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Date
-              </label>
-              <input
-                type="date"
-                value={manualForm.date}
-                onChange={(e) =>
-                  setManualForm((p) => ({ ...p, date: e.target.value }))
-                }
-                className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  Start time
-                </label>
-                <input
-                  type="time"
-                  value={manualForm.time}
-                  onChange={(e) =>
-                    setManualForm((p) => ({ ...p, time: e.target.value }))
-                  }
-                  className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  End time (optional)
-                </label>
-                <input
-                  type="time"
-                  value={manualForm.endTime}
-                  onChange={(e) =>
-                    setManualForm((p) => ({ ...p, endTime: e.target.value }))
-                  }
-                  className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50"
-                />
-              </div>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Steps (optional)
-              </label>
-              <input
-                value={manualForm.steps}
-                onChange={(e) =>
-                  setManualForm((p) => ({ ...p, steps: e.target.value }))
-                }
-                placeholder="Warmup, main task, cooldown"
-                className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Location (optional)
-              </label>
-              <div className="flex gap-2">
-                <input
-                  value={manualForm.location}
-                  onChange={(e) =>
-                    setManualForm((p) => ({ ...p, location: e.target.value }))
-                  }
-                  className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleGetCurrentLocation("manual")}
-                  disabled={isGettingLocation}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 rounded-xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Use my current location"
-                >
-                  {isGettingLocation ? (
-                    <Loader size={16} className="animate-spin" />
-                  ) : (
-                    <MapPin size={16} />
-                  )}
-                </button>
-              </div>
-            </div>
-            <button
-              onClick={handleSoloSave}
-              disabled={!canSubmitSoloManual}
-              className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl disabled:opacity-50"
-            >
-              {isEditMode ? "Update activity" : "Save to My upcoming"}
-            </button>
-          </div>
         )}
       </>
-    ),
-    [
-      aiForm,
-      canSubmitSoloManual,
-      isLoading,
-      manualForm,
-      onSaveSuggestion,
-      soloMode,
-      suggestions,
-      timeOptions,
-    ]
-  );
+    );
 
-  const groupFormView = useMemo(
-    () => (
+  const manualFormView = (
       <div className="space-y-3">
+        {/* Show back button if user came from AI suggestions */}
+        {suggestions.length > 0 && (
+          <button
+            onClick={() => {
+              setMode("ai");
+              // Clear form but keep suggestions
+              setFormData({
+                title: "",
+                description: "",
+                date: defaultDate,
+                time: "",
+                endTime: "",
+                location: "",
+                visibility: "private",
+                maxParticipants: 6,
+                allowAutoJoin: false,
+                steps: "",
+              });
+            }}
+            className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+          >
+            ← Back to suggestions
+          </button>
+        )}
+        
+        {/* Title */}
         <div className="flex flex-col gap-1">
           <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
             Title
           </label>
           <input
-            value={groupForm.title}
+            value={formData.title}
             onChange={(e) =>
-              setGroupForm((p) => ({ ...p, title: e.target.value }))
+              setFormData((p) => ({ ...p, title: e.target.value }))
             }
             className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50"
           />
         </div>
+
+        {/* Visibility Dropdown */}
         <div className="flex flex-col gap-1">
           <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-            Description
+            Visibility
           </label>
-          <textarea
-            value={groupForm.description}
+          <select
+            value={formData.visibility}
             onChange={(e) =>
-              setGroupForm((p) => ({ ...p, description: e.target.value }))
+              setFormData((p) => ({ ...p, visibility: e.target.value }))
             }
-            className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 min-h-[80px]"
-          />
+            className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50"
+          >
+            <option value="private">🔒 Private (Default)</option>
+            <option value="friends">👥 Friends</option>
+            <option value="public">🌐 Public</option>
+          </select>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+
+        {/* Date & Time Row */}
+        <div className="grid grid-cols-3 gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
               Date
             </label>
             <input
               type="date"
-              value={groupForm.date}
+              value={formData.date}
               onChange={(e) =>
-                setGroupForm((p) => ({ ...p, date: e.target.value }))
+                setFormData((p) => ({ ...p, date: e.target.value }))
               }
               className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50"
             />
@@ -1026,109 +870,130 @@ export default function PlanActivityModal({
             </label>
             <input
               type="time"
-              value={groupForm.time}
+              value={formData.time}
               onChange={(e) =>
-                setGroupForm((p) => ({ ...p, time: e.target.value }))
+                setFormData((p) => ({ ...p, time: e.target.value }))
               }
               className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50"
             />
           </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              End time (optional)
+              End time
             </label>
             <input
               type="time"
-              value={groupForm.endTime}
+              value={formData.endTime}
               onChange={(e) =>
-                setGroupForm((p) => ({ ...p, endTime: e.target.value }))
+                setFormData((p) => ({ ...p, endTime: e.target.value }))
               }
               className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50"
             />
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              Location
-            </label>
-            <div className="flex gap-2">
-              <input
-                value={groupForm.location}
-                onChange={(e) =>
-                  setGroupForm((p) => ({ ...p, location: e.target.value }))
-                }
-                className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50"
-              />
-              <button
-                type="button"
-                onClick={() => handleGetCurrentLocation("group")}
-                disabled={isGettingLocation}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-3 rounded-xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Use my current location"
-              >
-                {isGettingLocation ? (
-                  <Loader size={16} className="animate-spin" />
-                ) : (
-                  <MapPin size={16} />
-                )}
-              </button>
-            </div>
+        </div>
+
+        {/* Location */}
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+            Location (optional)
+          </label>
+          <div className="flex gap-2">
+            <input
+              value={formData.location}
+              onChange={(e) =>
+                setFormData((p) => ({ ...p, location: e.target.value }))
+              }
+              placeholder="Address or venue name"
+              className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50"
+            />
+            <button
+              type="button"
+              onClick={() => handleGetCurrentLocation("unified")}
+              disabled={isGettingLocation}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 rounded-xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Use my current location"
+            >
+              {isGettingLocation ? (
+                <Loader size={16} className="animate-spin" />
+              ) : (
+                <MapPin size={16} />
+              )}
+            </button>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+
+        {/* Description */}
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+            Description (optional)
+          </label>
+          <textarea
+            value={formData.description}
+            onChange={(e) =>
+              setFormData((p) => ({ ...p, description: e.target.value }))
+            }
+            className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50 min-h-[80px]"
+          />
+        </div>
+
+        {/* Steps (only for private activities) */}
+        {formData.visibility === "private" && (
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              Max participants
+              Steps (optional)
             </label>
             <input
-              type="number"
-              min="1"
-              value={groupForm.maxParticipants}
+              value={formData.steps}
               onChange={(e) =>
-                setGroupForm((p) => ({ ...p, maxParticipants: e.target.value }))
+                setFormData((p) => ({ ...p, steps: e.target.value }))
               }
+              placeholder="Warmup, main task, cooldown"
               className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50"
             />
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              Visibility
+        )}
+
+        {/* Capacity Section - Only show if NOT private */}
+        {formData.visibility !== "private" && (
+          <>
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                Max participants
+              </label>
+              <input
+                type="number"
+                min="2"
+                value={formData.maxParticipants}
+                onChange={(e) =>
+                  setFormData((p) => ({ ...p, maxParticipants: parseInt(e.target.value) || 6 }))
+                }
+                className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50"
+              />
+            </div>
+            <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-600">
+              <input
+                type="checkbox"
+                checked={formData.allowAutoJoin}
+                onChange={(e) =>
+                  setFormData((p) => ({ ...p, allowAutoJoin: e.target.checked }))
+                }
+                className="accent-blue-600"
+              />
+              Allow immediate join?
             </label>
-            <select
-              value={groupForm.visibility}
-              onChange={(e) =>
-                setGroupForm((p) => ({ ...p, visibility: e.target.value }))
-              }
-              className="border border-slate-200 rounded-xl px-3 py-2 text-sm bg-slate-50"
-            >
-              <option value="friends">Friends only</option>
-              <option value="public">Public</option>
-            </select>
-          </div>
-        </div>
-        <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-600">
-          <input
-            type="checkbox"
-            checked={groupForm.allowAutoJoin}
-            onChange={(e) =>
-              setGroupForm((p) => ({ ...p, allowAutoJoin: e.target.checked }))
-            }
-            className="accent-blue-600"
-          />
-          Allow immediate join?
-        </label>
+          </>
+        )}
+
+        {/* Submit Button */}
         <button
-          onClick={handleGroupSave}
-          disabled={!canSubmitGroup}
-          className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl disabled:opacity-50"
+          onClick={handleSave}
+          disabled={!canSubmit}
+          className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl disabled:opacity-50"
         >
-          {isEditMode ? "Update activity" : "Create & publish"}
+          {isEditMode ? "Update activity" : (formData.visibility === "private" ? "Save to My upcoming" : "Create & publish")}
         </button>
       </div>
-    ),
-    [canSubmitGroup, groupForm]
-  );
+    );
 
   if (!isOpen) return null;
 
@@ -1154,38 +1019,40 @@ export default function PlanActivityModal({
         
         {/* Content */}
         <div className="px-5 md:px-6 py-4">
+          {/* Mode Toggle: AI Suggestion vs Manual Entry */}
           {!isEditMode && (
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-4">
               <button
                 onClick={() => {
-                  setMode("solo");
+                  setMode("ai");
                   setSuggestions([]);
                 }}
-                className={`flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold border ${
-                  mode === "solo"
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-                    : "bg-white text-slate-600 border-slate-200"
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border ${
+                  mode === "ai"
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
                 }`}
               >
-                <User size={14} /> Private
+                <Sparkles size={16} /> AI Suggestion
               </button>
               <button
                 onClick={() => {
-                  setMode("group");
+                  setMode("manual");
                   setSuggestions([]);
                 }}
-                className={`flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold border ${
-                  mode === "group"
-                    ? "bg-blue-50 text-blue-700 border-blue-100"
-                    : "bg-white text-slate-600 border-slate-200"
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border ${
+                  mode === "manual"
+                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                    : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
                 }`}
               >
-                <Users size={14} /> Public
+                📝 Manual Entry
               </button>
             </div>
           )}
 
-          {mode === "solo" ? soloForm : groupFormView}
+          {/* Render appropriate view based on mode */}
+          {mode === "ai" ? aiSuggestionView : manualFormView}
 
           <div className="mt-4 text-[11px] text-slate-500 flex items-center gap-1">
             <AlertCircle size={12} className="text-emerald-500" />

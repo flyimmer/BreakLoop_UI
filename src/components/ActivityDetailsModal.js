@@ -136,7 +136,7 @@ export function ActivityDetailsModal({
               onClick={() => onRequestJoin?.(activity)}
               className="w-full bg-blue-600 text-white font-bold py-2.5 rounded-xl flex items-center justify-center gap-2"
             >
-              <Users size={16} /> Join the event
+              <Users size={16} /> Ask to join
             </button>
           )}
 

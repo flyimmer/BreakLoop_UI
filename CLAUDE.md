@@ -101,9 +101,16 @@ src/
   - Checks `upcomingActivities` to determine if user has joined
   - Request management for hosts (accept/decline join requests)
   - Uses shared `findUpcomingActivity()` and `HOST_LABELS_MODAL` utilities
-- `PlanActivityModal` - AI-powered or manual activity planning interface
-  - Supports both create and edit modes
-  - Edit mode pre-populates form with existing activity data
+- `PlanActivityModal` - **Unified Form UX** for activity planning (December 2024 refactor)
+  - **Architecture:** Single unified form with visibility dropdown (Private/Friends/Public)
+  - **Mode Toggle:** AI Suggestion vs Manual Entry (not Private vs Public)
+  - **Key Feature:** Seamless conversion between private and public activities
+  - **State:** Single `formData` object with `visibility` field determining activity type
+  - **Conditional Fields:** 
+    - Steps field only shown for private activities
+    - Capacity section (max participants, allow immediate join) only shown for friends/public
+  - **Edit Mode:** Pre-populates form with existing activity data
+  - **AI Integration:** Users can edit AI suggestions and change visibility before saving
   - Uses `parseFormattedDate()`, `parseTimeString()`, `parseTimeRange()` from `utils/time.js` for date/time parsing
 - `AltSchedulerModal` - Schedule alternatives for later (Plan for Later flow)
 - `ActivitySuggestionCard` - Presents AI suggestions with Accept/Edit/Save actions
@@ -398,7 +405,7 @@ Development:
 REACT_APP_GEMINI_KEY=your_api_key_here
 ```
 
-## Recent Refactoring (December 2025)
+## Recent Refactoring (December 2024)
 
 The codebase underwent incremental refactoring to improve maintainability while preserving all existing functionality:
 
@@ -416,10 +423,30 @@ The codebase underwent incremental refactoring to improve maintainability while 
 - Created `constants/config.js` - Centralized app configuration constants
   - Version, location, Quick Task settings, default values
 
+**Phase 3 - Unified Form UX (December 21, 2024):**
+- Refactored `PlanActivityModal` to implement unified form architecture
+- **Key Changes:**
+  - Removed Private/Public top-level tabs
+  - Added AI Suggestion vs Manual Entry mode toggle
+  - Implemented single unified form with visibility dropdown
+  - Visibility field (Private/Friends/Public) determines activity type at save time
+  - Conditional fields appear based on visibility selection
+- **Benefits:**
+  - Users can convert AI suggestions from private to public seamlessly
+  - No duplicate form logic for solo vs group activities
+  - Cleaner state management with single `formData` object
+  - More intuitive user experience
+- **Bug Fixes:**
+  - Fixed stale closure issues in `useMemo` (removed unnecessary memoization)
+  - Fixed scope issue where `updateCommunityData` wasn't accessible in `BreakLoopConfig`
+  - Added `updateCommunityData` helper inside `BreakLoopConfig` component
+- **UI Improvements:**
+  - Changed "Join the event" button to "Ask to join" for clarity
+
 **Impact:**
-- **-218 lines** of duplicate/debug code removed
-- **+96 lines** added in reusable utilities
-- **Net improvement:** -122 lines + better organization
+- **Phase 1-2:** -218 lines of duplicate/debug code, +96 lines in reusable utilities
+- **Phase 3:** Bundle size optimized (113 kB, -47 B from removing useMemo)
+- **Net improvement:** Better organization, cleaner code, enhanced UX
 - Build verified: No breaking changes, all functionality preserved
 - Components now share utilities for consistent behavior
 
@@ -427,11 +454,14 @@ The codebase underwent incremental refactoring to improve maintainability while 
 - `src/constants/hostLabels.js` (19 lines)
 - `src/constants/config.js` (48 lines)
 - `src/utils/activityMatching.js` (29 lines)
+- `design/REFACTORING_CHANGELOG_DEC_2024.md` (comprehensive changelog)
 
 **Files Significantly Modified:**
-- `src/App.js` (6,442 → 6,385 lines, -57 lines)
-- `src/components/PlanActivityModal.jsx` (904 → 797 lines, -107 lines)
+- `src/App.js` (6,442 → 6,887 lines, +445 lines for scope fix)
+- `src/components/PlanActivityModal.jsx` (904 → 797 lines, -107 lines, unified form)
+- `src/components/ActivityDetailsModal.js` (button text update)
 - `src/utils/time.js` (30 → 158 lines, +128 lines for new parsing functions)
+- `design/ux/flows.md` (added Flow 10.1 documenting unified form)
 
 
 ## Git Workflow

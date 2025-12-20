@@ -4000,6 +4000,12 @@ function BreakLoopConfig({
 
   const buildTimeLabel = (start, end) =>
     end ? `${start || "TBD"} - ${end}` : start || "TBD";
+
+  // Helper to update community data using actions from parent
+  const updateCommunityData = (updater) =>
+    actions.setCommunityData((prev) =>
+      typeof updater === "function" ? updater(prev) : updater
+    );
   
   // Local ref for live session timeout
   const liveSessionTimeoutRef = useRef(null);

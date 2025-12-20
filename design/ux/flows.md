@@ -975,6 +975,149 @@ This document defines user journeys through the BreakLoop app by sequencing stat
 
 ---
 
+## Flow 10.1: Plan Activity with Unified Form (December 2024 Update)
+
+**Entry Point:** User wants to plan activity (private or public)
+
+**Prerequisites:**
+- `hasOnboarded: true`
+- In BreakLoop Community tab
+
+**Architecture Change:** 
+The Plan Activity Modal now uses a **Unified Form UX** where visibility (Private/Friends/Public) is a dropdown field instead of separate top-level tabs. This allows seamless conversion between private and public activities.
+
+**Steps:**
+
+1. **Open Plan Activity Modal**
+   - User Action: Tap "Plan activity" button
+   - State Update: `showPlanModal: true`
+   - Display: Modal with mode toggle at top:
+     - **✨ AI Suggestion** (default)
+     - **📝 Manual Entry**
+
+**Path A: AI Suggestion → Manual Entry**
+
+2. **AI Suggestion Mode**
+   - State: `mode: "ai"`
+   - Display: Form inputs (Topic, Location, Time Preference, Date, Participants)
+   - User Action: Fill form and tap "Generate suggestions"
+   - Result: 3 AI-generated activity cards
+
+3. **Edit AI Suggestion**
+   - User Action: Tap "Edit" on any suggestion card
+   - State Updates:
+     - `mode: "manual"` (switches to Manual Entry)
+     - `formData` populated with suggestion data
+     - `suggestions` preserved for back navigation
+   - Display: Unified manual form with pre-filled data
+
+4. **Unified Manual Form**
+   - Display: Single-column form with fields in order:
+     1. **Title** (required)
+     2. **Visibility Dropdown** (🔒 Private / 👥 Friends / 🌐 Public)
+     3. **Date & Time Row** (Date | Start Time | End Time)
+     4. **Location** (with GPS button)
+     5. **Description** (textarea)
+     6. **Steps** (only shown if visibility = "private")
+     7. **Capacity Section** (only shown if visibility ≠ "private"):
+        - Max Participants (number input)
+        - Allow Immediate Join (checkbox)
+
+5. **Change Visibility**
+   - User Action: Select "Friends" or "Public" from Visibility dropdown
+   - State Update: `formData.visibility: "friends" | "public"`
+   - Display Changes:
+     - "Steps" field hides
+     - "Max Participants" field appears
+     - "Allow Immediate Join" checkbox appears
+   - Note: This is the key benefit - users can convert AI suggestions from private to public seamlessly
+
+6. **Save Activity**
+   - User Action: Tap "Create & publish" button (or "Save to My upcoming" if private)
+   - Validation: Requires title, date, time
+   - Logic:
+     - If `visibility === "private"`: Calls `onCreateSolo()`
+     - If `visibility === "friends" | "public"`: Calls `onCreateGroup()`
+   - State Updates:
+     - Adds to `upcomingActivities`
+     - If public/friends: Also adds to `friendSharedActivities` or `publicEvents`
+     - `showPlanModal: false`
+   - Display: Toast notification + modal closes
+
+**Path B: Direct Manual Entry**
+
+2. **Manual Entry Mode**
+   - User Action: Tap "📝 Manual Entry" toggle
+   - State: `mode: "manual"`
+   - Display: Same unified manual form (fields 1-7 above)
+
+3. **Fill Form**
+   - User Actions: Fill required fields (title, date, time)
+   - Optional: Change visibility, add location, description, etc.
+
+4. **Save Activity**
+   - Same as step 6 above
+
+**Path C: Back Navigation**
+
+2. **From Manual to AI Suggestions**
+   - Condition: User came from AI suggestions (`suggestions.length > 0`)
+   - Display: "← Back to suggestions" button at top of manual form
+   - User Action: Tap back button
+   - State Updates:
+     - `mode: "ai"`
+     - Clears `formData`
+     - Preserves `suggestions`
+   - Display: Returns to AI suggestions view
+
+**Benefits of Unified Form:**
+
+1. **Flexible Workflow:**
+   - Use AI to find a jogging route → keep it Private
+   - Use AI to find a restaurant → change to Public
+   - Same form for all scenarios
+
+2. **Reduced Complexity:**
+   - No separate Private/Public tabs
+   - Visibility is just another field
+   - Conditional fields only appear when relevant
+
+3. **Seamless Conversion:**
+   - Can convert any activity from private to public
+   - Can adjust capacity settings dynamically
+   - No mode switching required
+
+**State Management:**
+
+```javascript
+// Unified state object
+formData: {
+  title: string,
+  description: string,
+  date: string,        // ISO format
+  time: string,        // HH:MM
+  endTime: string,     // HH:MM
+  location: string,
+  visibility: "private" | "friends" | "public",  // Key field
+  maxParticipants: number,  // Only used if visibility ≠ "private"
+  allowAutoJoin: boolean,   // Only used if visibility ≠ "private"
+  steps: string,            // Only used if visibility === "private"
+}
+```
+
+**Exit Points:**
+- Activity saved → added to appropriate lists based on visibility
+- Modal closed → returns to Community tab
+- Back to suggestions → returns to AI view
+
+**Mobile Considerations:**
+- Visibility dropdown uses native select on mobile
+- Conditional fields smoothly appear/disappear
+- Form scrolls independently within modal
+- GPS button for location uses device geolocation API
+
+---
+
 ## Flow 11: Alt Scheduler Modal (Plan for Later)
 
 **Entry Point:** User wants to schedule alternative for future
