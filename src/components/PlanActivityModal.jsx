@@ -155,7 +155,6 @@ export default function PlanActivityModal({
   onCreateSolo,
   onCreateGroup,
   onUpdateActivity,
-  onAcceptSuggestion,
   onSaveSuggestion,
   defaultDate,
   editActivity,
@@ -365,12 +364,6 @@ export default function PlanActivityModal({
     location: suggestion.location || aiForm.location,
     topic: suggestion.topic || aiForm.topic,
   });
-
-  const handleAccept = (suggestion) => {
-    onAcceptSuggestion?.(withContext(suggestion));
-    // Reset modal after accepting
-    resetModal();
-  };
 
   const handleSoloSave = () => {
     if (soloMode === "manual" && canSubmitSoloManual) {
@@ -607,7 +600,6 @@ export default function PlanActivityModal({
                   <ActivitySuggestionCard
                     key={suggestion.id}
                     suggestion={suggestion}
-                    onAccept={handleAccept}
                     onEdit={(s) => {
                       setManualForm((prev) => ({
                         ...prev,
@@ -748,7 +740,6 @@ export default function PlanActivityModal({
     [
       aiForm,
       canSubmitSoloManual,
-      handleAccept,
       isLoading,
       manualForm,
       onSaveSuggestion,

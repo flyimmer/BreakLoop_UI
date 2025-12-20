@@ -6471,12 +6471,6 @@ function BreakLoopConfig({
         editActivity={activityToEdit}
         onCreateSolo={(data) => addSoloActivity(data, { source: "manual", onComplete: () => { setShowPlanModal(false); setActivityToEdit(null); } })}
         onUpdateActivity={handleUpdateActivity}
-        onAcceptSuggestion={(suggestion) =>
-          addSoloActivity(
-            { ...suggestion, date: suggestion.date || todayIso },
-            { source: "ai", onComplete: () => { setShowPlanModal(false); setActivityToEdit(null); } }
-          )
-        }
         onSaveSuggestion={(suggestion) =>
           addSoloActivity(
             { ...suggestion, date: suggestion.date || todayIso },

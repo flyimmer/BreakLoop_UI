@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Check, Edit2, MapPin, Save, Sparkles, Clock, ChevronDown, ChevronUp } from "lucide-react";
+import { Edit2, MapPin, Save, Sparkles, Clock, ChevronDown, ChevronUp } from "lucide-react";
 
 // Helper function to create a short summary from description
 function getDescriptionSummary(description) {
@@ -17,7 +17,6 @@ function getDescriptionSummary(description) {
 // Lightweight card used inside the planner to present AI suggestions.
 export default function ActivitySuggestionCard({
   suggestion,
-  onAccept,
   onEdit,
   onSave,
 }) {
@@ -92,13 +91,7 @@ export default function ActivitySuggestionCard({
         ) : null}
       </div>
 
-      <div className="grid grid-cols-3 gap-2 pt-2">
-        <button
-          onClick={() => onAccept?.(suggestion)}
-          className="w-full bg-emerald-600 text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1"
-        >
-          <Check size={14} /> Accept
-        </button>
+      <div className="grid grid-cols-2 gap-2 pt-2">
         <button
           onClick={() => onEdit?.(suggestion)}
           className="w-full bg-white border border-slate-200 text-slate-700 font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1"
@@ -107,7 +100,7 @@ export default function ActivitySuggestionCard({
         </button>
         <button
           onClick={() => onSave?.(suggestion)}
-          className="w-full bg-slate-900 text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1"
+          className="w-full bg-emerald-600 text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1"
         >
           <Save size={14} /> Save
         </button>
