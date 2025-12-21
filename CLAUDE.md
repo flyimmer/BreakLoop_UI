@@ -22,6 +22,33 @@ npm run eject
 
 **BreakLoop** is a React-based digital wellbeing application that helps users break mindless scrolling habits through mindful interventions, alternative activity suggestions, and community accountability features.
 
+## Design Documentation
+
+This project includes comprehensive design documentation that serves as the source of truth for UI/UX implementation:
+
+**State Management & Flows:**
+- `design/ux/states.md` - Complete UI state definitions, transitions, triggers, and edge cases (997 lines)
+- `design/ux/flows.md` - Detailed user flow documentation with 14 major flows covering all user journeys
+
+**Design System:**
+- `design/ui/components.md` - Component library specification with all reusable UI components
+- `design/ui/screens.md` - Complete screen inventory (38 screens organized by category)
+- `design/ui/tokens.md` - Design tokens (colors, spacing, typography, elevation, motion)
+- `design/ui/tone-ambient-hearth.md` - Design tone/philosophy ("Ambient Hearth" aesthetic)
+
+**Design Principles:**
+- `design/principles/interaction-gravity.md` - Interaction gravity modes for intervention flows
+- `design/principles/handoff-rules.md` - Rules for transitioning between Interruption UI and Main App UI
+
+**Component Documentation:**
+- `src/components/CauseCard.README.md` - CauseCard component design and implementation guide
+
+**When implementing features:**
+- Reference `states.md` for state management and transitions
+- Reference `flows.md` for user journey sequences
+- Reference `components.md` and `screens.md` for UI structure
+- Follow `tone-ambient-hearth.md` and `tokens.md` for styling consistency
+
 ## High-Level Architecture
 
 ### Single-File Application Pattern
@@ -75,6 +102,13 @@ src/
 
 ### State Management Strategy
 
+**State Architecture:**
+- Comprehensive state definitions documented in `design/ux/states.md`
+- Root contexts: `launcher`, `app-mindful`, `app-{id}`
+- Intervention flow states: `idle`, `breathing`, `root-cause`, `alternatives`, `action`, `action_timer`, `timer`, `reflection`
+- Modal states: `showPlanModal`, `showAltScheduler`, `selectedActivity`, etc.
+- See `design/ux/states.md` for complete state variable reference and transition matrix
+
 **Persistence Layer:**
 - `useStickyState` hook (`src/hooks/useStickyState.js`) wraps localStorage with React state
 - Supports a `disablePersistence` option for demo mode
@@ -101,16 +135,9 @@ src/
   - Checks `upcomingActivities` to determine if user has joined
   - Request management for hosts (accept/decline join requests)
   - Uses shared `findUpcomingActivity()` and `HOST_LABELS_MODAL` utilities
-- `PlanActivityModal` - **Unified Form UX** for activity planning (December 2024 refactor)
-  - **Architecture:** Single unified form with visibility dropdown (Private/Friends/Public)
-  - **Mode Toggle:** AI Suggestion vs Manual Entry (not Private vs Public)
-  - **Key Feature:** Seamless conversion between private and public activities
-  - **State:** Single `formData` object with `visibility` field determining activity type
-  - **Conditional Fields:** 
-    - Steps field only shown for private activities
-    - Capacity section (max participants, allow immediate join) only shown for friends/public
-  - **Edit Mode:** Pre-populates form with existing activity data
-  - **AI Integration:** Users can edit AI suggestions and change visibility before saving
+- `PlanActivityModal` - AI-powered or manual activity planning interface
+  - Supports both create and edit modes
+  - Edit mode pre-populates form with existing activity data
   - Uses `parseFormattedDate()`, `parseTimeString()`, `parseTimeRange()` from `utils/time.js` for date/time parsing
 - `AltSchedulerModal` - Schedule alternatives for later (Plan for Later flow)
 - `ActivitySuggestionCard` - Presents AI suggestions with Accept/Edit/Save actions
@@ -123,6 +150,15 @@ src/
 
 ### Key Features & Flows
 
+**Note:** For detailed flow documentation, see `design/ux/flows.md` which contains 14 comprehensive user flows including:
+- First-time onboarding
+- Monitored app → Quick Task flow
+- Monitored app → Full Intervention flow
+- Community activity join flow
+- Plan Activity with AI suggestions
+- Edit/Cancel activity flows
+- And more...
+
 **1. Intervention System**
 When a monitored app is launched:
 - Quick Task dialog (emergency bypass with time limit)
@@ -131,6 +167,9 @@ When a monitored app is launched:
 - Alternative discovery (My List, Discover, AI For You tabs)
 - Action timer with activity steps
 - Reflection & streak tracking
+
+**State Flow:** `idle → breathing → root-cause → alternatives → action → action_timer → reflection → idle`
+- See `design/ux/states.md` for complete intervention state definitions and transitions
 
 **2. Activity Planning**
 Three modes accessible via Community tab:
@@ -171,15 +210,11 @@ Three modes accessible via Community tab:
 
 ## AI Integration
 
-**📖 For detailed AI documentation, see [`design/AI_INTEGRATION.md`](design/AI_INTEGRATION.md)**
-
 **Gemini API** (optional):
 - Set `REACT_APP_GEMINI_KEY` environment variable
-- **Model:** `gemini-2.0-flash-exp` with Google Search Grounding
-- **Temperature:** 0.1 (maximum factuality, prevents hallucination)
 - Used for:
-  - Activity planning suggestions (`PlanActivityModal`) - Real-time event search
-  - Alternative idea generation (AI For You tab) - Contextual suggestions
+  - Activity planning suggestions (`PlanActivityModal`)
+  - Alternative idea generation (AI For You tab)
   - Deep insights analysis (Insights screen)
 - Implementation in `src/utils/gemini.js`
 - Gracefully degrades if API key is missing
@@ -405,7 +440,7 @@ Development:
 REACT_APP_GEMINI_KEY=your_api_key_here
 ```
 
-## Recent Refactoring (December 2024)
+## Recent Refactoring (December 2025)
 
 The codebase underwent incremental refactoring to improve maintainability while preserving all existing functionality:
 
@@ -423,30 +458,10 @@ The codebase underwent incremental refactoring to improve maintainability while 
 - Created `constants/config.js` - Centralized app configuration constants
   - Version, location, Quick Task settings, default values
 
-**Phase 3 - Unified Form UX (December 21, 2024):**
-- Refactored `PlanActivityModal` to implement unified form architecture
-- **Key Changes:**
-  - Removed Private/Public top-level tabs
-  - Added AI Suggestion vs Manual Entry mode toggle
-  - Implemented single unified form with visibility dropdown
-  - Visibility field (Private/Friends/Public) determines activity type at save time
-  - Conditional fields appear based on visibility selection
-- **Benefits:**
-  - Users can convert AI suggestions from private to public seamlessly
-  - No duplicate form logic for solo vs group activities
-  - Cleaner state management with single `formData` object
-  - More intuitive user experience
-- **Bug Fixes:**
-  - Fixed stale closure issues in `useMemo` (removed unnecessary memoization)
-  - Fixed scope issue where `updateCommunityData` wasn't accessible in `BreakLoopConfig`
-  - Added `updateCommunityData` helper inside `BreakLoopConfig` component
-- **UI Improvements:**
-  - Changed "Join the event" button to "Ask to join" for clarity
-
 **Impact:**
-- **Phase 1-2:** -218 lines of duplicate/debug code, +96 lines in reusable utilities
-- **Phase 3:** Bundle size optimized (113 kB, -47 B from removing useMemo)
-- **Net improvement:** Better organization, cleaner code, enhanced UX
+- **-218 lines** of duplicate/debug code removed
+- **+96 lines** added in reusable utilities
+- **Net improvement:** -122 lines + better organization
 - Build verified: No breaking changes, all functionality preserved
 - Components now share utilities for consistent behavior
 
@@ -454,14 +469,11 @@ The codebase underwent incremental refactoring to improve maintainability while 
 - `src/constants/hostLabels.js` (19 lines)
 - `src/constants/config.js` (48 lines)
 - `src/utils/activityMatching.js` (29 lines)
-- `design/REFACTORING_CHANGELOG_DEC_2024.md` (comprehensive changelog)
 
 **Files Significantly Modified:**
-- `src/App.js` (6,442 → 6,887 lines, +445 lines for scope fix)
-- `src/components/PlanActivityModal.jsx` (904 → 797 lines, -107 lines, unified form)
-- `src/components/ActivityDetailsModal.js` (button text update)
+- `src/App.js` (6,442 → 6,385 lines, -57 lines)
+- `src/components/PlanActivityModal.jsx` (904 → 797 lines, -107 lines)
 - `src/utils/time.js` (30 → 158 lines, +128 lines for new parsing functions)
-- `design/ux/flows.md` (added Flow 10.1 documenting unified form)
 
 
 ## Git Workflow
@@ -479,3 +491,19 @@ Recent commit themes:
 - Privacy settings expansion
 - Activity management features (edit, cancel, quit event)
 - PlanActivityModal edit mode support with start/end time fields
+
+## Documentation Structure
+
+**For Developers:**
+- `CLAUDE.md` (this file) - Architecture, implementation details, development workflow
+- `DEVELOPMENT_NOTE_PLAN_ACTIVITY.md` - Plan Activity feature-specific notes and QA checklist
+- Component READMEs (e.g., `src/components/CauseCard.README.md`) - Component-specific documentation
+
+**For Designers/UX:**
+- `design/ux/states.md` - Complete state management reference
+- `design/ux/flows.md` - User journey flows
+- `design/ui/components.md` - Component library specification
+- `design/ui/screens.md` - Screen inventory
+- `design/ui/tokens.md` - Design tokens
+- `design/ui/tone-ambient-hearth.md` - Design philosophy
+- `design/principles/` - Design principles and interaction rules
