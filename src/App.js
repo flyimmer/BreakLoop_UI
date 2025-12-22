@@ -4103,7 +4103,7 @@ function BreakLoopConfig({
   const [showFriendMenu, setShowFriendMenu] = useState(false);
   // Controls the new Plan Activity modal (replaces inline stub card).
   const [showPlanModal, setShowPlanModal] = useState(false);
-  // Community tab horizontal menu (friends | my-upcoming | discover | plan)
+  // Community tab horizontal menu (my-upcoming | discover | plan | friends)
   const [communityMenu, setCommunityMenu] = useState("friends");
   const [activityToEdit, setActivityToEdit] = useState(null);
   // Registration modal state
@@ -6271,16 +6271,6 @@ function BreakLoopConfig({
                 {/* Horizontal Menu Navigation */}
                 <div className="grid grid-cols-4 gap-2 mb-4 flex-shrink-0">
                   <button
-                    onClick={() => setCommunityMenu("friends")}
-                    className={`px-2 py-2 rounded-xl font-bold text-xs transition-colors ${
-                      communityMenu === "friends"
-                        ? "bg-slate-900 text-white"
-                        : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-                    }`}
-                  >
-                    Friends
-                  </button>
-                  <button
                     onClick={() => setCommunityMenu("my-upcoming")}
                     className={`px-2 py-2 rounded-xl font-bold text-xs transition-colors ${
                       communityMenu === "my-upcoming"
@@ -6307,6 +6297,16 @@ function BreakLoopConfig({
                     className="px-2 py-2 rounded-xl font-bold text-xs transition-colors bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
                   >
                     Plan
+                  </button>
+                  <button
+                    onClick={() => setCommunityMenu("friends")}
+                    className={`px-2 py-2 rounded-xl font-bold text-xs transition-colors ${
+                      communityMenu === "friends"
+                        ? "bg-slate-900 text-white"
+                        : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                    }`}
+                  >
+                    Friends
                   </button>
                 </div>
 
