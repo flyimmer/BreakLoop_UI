@@ -4103,7 +4103,7 @@ function BreakLoopConfig({
   const [showFriendMenu, setShowFriendMenu] = useState(false);
   // Controls the new Plan Activity modal (replaces inline stub card).
   const [showPlanModal, setShowPlanModal] = useState(false);
-  // Community tab horizontal menu (my-upcoming | discover | plan | friends)
+  // Community content tabs (my-upcoming | discover | friends) + Plan action button
   const [communityMenu, setCommunityMenu] = useState("friends");
   const [activityToEdit, setActivityToEdit] = useState(null);
   // Registration modal state
@@ -6269,44 +6269,53 @@ function BreakLoopConfig({
                 </div>
 
                 {/* Horizontal Menu Navigation */}
-                <div className="grid grid-cols-4 gap-2 mb-4 flex-shrink-0">
-                  <button
-                    onClick={() => setCommunityMenu("my-upcoming")}
-                    className={`px-2 py-2 rounded-xl font-bold text-xs transition-colors ${
-                      communityMenu === "my-upcoming"
-                        ? "bg-slate-900 text-white"
-                        : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-                    }`}
-                  >
-                    My Upcoming
-                  </button>
-                  <button
-                    onClick={() => setCommunityMenu("discover")}
-                    className={`px-2 py-2 rounded-xl font-bold text-xs transition-colors ${
-                      communityMenu === "discover"
-                        ? "bg-slate-900 text-white"
-                        : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-                    }`}
-                  >
-                    Discover
-                  </button>
+                <div className="flex gap-2 mb-4 flex-shrink-0">
+                  {/* Content Tabs (3-column grid) */}
+                  <div className="grid grid-cols-3 gap-2 flex-1">
+                    <button
+                      onClick={() => setCommunityMenu("my-upcoming")}
+                      disabled={showPlanModal}
+                      className={`px-2 py-2 rounded-xl font-bold text-xs transition-colors ${
+                        communityMenu === "my-upcoming"
+                          ? "bg-slate-900 text-white"
+                          : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                      } ${showPlanModal ? "opacity-50 cursor-not-allowed" : ""}`}
+                    >
+                      My Upcoming
+                    </button>
+                    <button
+                      onClick={() => setCommunityMenu("discover")}
+                      disabled={showPlanModal}
+                      className={`px-2 py-2 rounded-xl font-bold text-xs transition-colors ${
+                        communityMenu === "discover"
+                          ? "bg-slate-900 text-white"
+                          : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                      } ${showPlanModal ? "opacity-50 cursor-not-allowed" : ""}`}
+                    >
+                      Discover
+                    </button>
+                    <button
+                      onClick={() => setCommunityMenu("friends")}
+                      disabled={showPlanModal}
+                      className={`px-2 py-2 rounded-xl font-bold text-xs transition-colors ${
+                        communityMenu === "friends"
+                          ? "bg-slate-900 text-white"
+                          : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                      } ${showPlanModal ? "opacity-50 cursor-not-allowed" : ""}`}
+                    >
+                      Friends
+                    </button>
+                  </div>
+                  
+                  {/* Primary Action Button */}
                   <button
                     onClick={() => {
                       setShowPlanModal(true);
                     }}
-                    className="px-2 py-2 rounded-xl font-bold text-xs transition-colors bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                    className="px-4 py-2 rounded-xl font-bold text-xs transition-colors bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 flex items-center gap-1.5 whitespace-nowrap"
                   >
+                    <Plus size={14} strokeWidth={2.5} />
                     Plan
-                  </button>
-                  <button
-                    onClick={() => setCommunityMenu("friends")}
-                    className={`px-2 py-2 rounded-xl font-bold text-xs transition-colors ${
-                      communityMenu === "friends"
-                        ? "bg-slate-900 text-white"
-                        : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-                    }`}
-                  >
-                    Friends
                   </button>
                 </div>
 
