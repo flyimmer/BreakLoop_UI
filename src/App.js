@@ -91,6 +91,7 @@ import {
   RefreshCw,
   Key,
   ArrowLeft,
+  Inbox,
 } from "lucide-react";
 import { useStickyState } from "./hooks/useStickyState";
 import { callGemini, GEMINI_API_KEY } from "./utils/gemini";
@@ -102,7 +103,30 @@ import {
   emitEventUpdatedUpdate,
   emitEventCancelledUpdate,
   emitParticipantLeftUpdate,
+  UPDATE_TYPES,
 } from "./utils/eventUpdates";
+import {
+  getUnresolvedUpdates,
+  getUnresolvedCount,
+  resolveUpdate,
+  resolveUpdatesByEvent,
+  resolveUpdatesByEventAndType,
+  formatRelativeTime,
+} from "./utils/inbox";
+import {
+  getConversationId,
+  loadPrivateConversations,
+  savePrivateConversations,
+  getOrCreateConversation,
+  addMessageToConversation,
+  getAllConversationsSorted,
+  getConversation,
+  getOtherParticipantId,
+  migrateOldChatMessages,
+  isConversationUnread,
+  markConversationAsRead,
+  getUnreadConversationCount,
+} from "./utils/privateMessages";
 import {
   addMinutes,
   formatQuickTaskDuration,
@@ -1321,6 +1345,21 @@ export default function App() {
       resetAllState({ demoMode: true });
     }
   }, [demoMode, resetAllState]);
+
+  // Migrate old chatMessages to new privateConversations format (one-time)
+  useEffect(() => {
+    const migrationKey = 'private_messages_migrated_v1';
+    const alreadyMigrated = localStorage.getItem(migrationKey);
+    
+    if (!alreadyMigrated && chatMessages && Object.keys(chatMessages).length > 0) {
+      const migratedConversations = migrateOldChatMessages(chatMessages, currentUserId);
+      const existingConversations = loadPrivateConversations();
+      const merged = { ...migratedConversations, ...existingConversations };
+      savePrivateConversations(merged);
+      localStorage.setItem(migrationKey, 'true');
+      console.log('Migrated old chat messages to new format');
+    }
+  }, []); // Run once on mount
 
   useEffect(() => {
     let timer;
@@ -4064,6 +4103,10 @@ function BreakLoopConfig({
   const [chatInput, setChatInput] = useState("");
   const [selectedActivity, setSelectedActivity] = useState(null);
 
+  // INBOX STATE (Phase E-2d)
+  const [inboxSubTab, setInboxSubTab] = useState("updates"); // "messages" or "updates"
+  const [unresolvedUpdates, setUnresolvedUpdates] = useState([]);
+
   const [toast, setToast] = useState(null);
 
   // Pre-calc chart maximums so bars always have a visible height
@@ -4090,6 +4133,13 @@ function BreakLoopConfig({
       return () => clearTimeout(t);
     }
   }, [toast]);
+
+  // Load unresolved updates when entering inbox tab or when updates might have changed
+  useEffect(() => {
+    if (activeTab === "inbox") {
+      setUnresolvedUpdates(getUnresolvedUpdates());
+    }
+  }, [activeTab]);
 
   // Session Leave Timer
   useEffect(() => {
@@ -4189,34 +4239,36 @@ function BreakLoopConfig({
   const handleSendChatMessage = () => {
     if (!chatInput.trim() || !state.activeChatFriend) return;
     const friendId = state.activeChatFriend.id;
-    const newMessage = {
-      id: Date.now(),
-      sender: "me",
-      text: chatInput,
-      time: "Now",
-    };
-
-    const updatedChats = { ...state.chatMessages };
-    updatedChats[friendId] = [...(updatedChats[friendId] || []), newMessage];
-    actions.setChatMessages(updatedChats);
+    
+    // Get or create conversation
+    const conversationId = getConversationId(currentUserId, friendId);
+    getOrCreateConversation(currentUserId, friendId);
+    
+    // Add message to global store
+    addMessageToConversation(conversationId, {
+      senderId: currentUserId,
+      senderName: currentUser.name,
+      text: chatInput.trim(),
+    });
+    
     setChatInput("");
 
     // Auto reply simulation
     setTimeout(() => {
-      const reply = {
-        id: Date.now() + 1,
-        sender: "them",
+      addMessageToConversation(conversationId, {
+        senderId: friendId,
+        senderName: state.activeChatFriend.name,
         text: "Sounds good! 👍",
-        time: "Now",
-      };
-      const replyChats = { ...updatedChats }; // Ideally use state updater pattern here but this is a simplified view
-      replyChats[friendId] = [...(replyChats[friendId] || []), reply];
-      actions.setChatMessages(replyChats);
+      });
     }, 2000);
   };
 
   const openChat = (friend) => {
     actions.setActiveChatFriend(friend);
+    
+    // Mark conversation as read when opened (Phase E-2e)
+    const conversationId = getConversationId(currentUserId, friend.id);
+    markConversationAsRead(conversationId);
   };
 
   // GEMINI FUNCTIONS
@@ -4302,6 +4354,91 @@ function BreakLoopConfig({
     }, 2000);
   };
 
+  // INBOX HANDLERS (Phase E-2d)
+  const handleChatOpened = useCallback((eventId) => {
+    // Resolve all event_chat updates for this event
+    resolveUpdatesByEventAndType(eventId, UPDATE_TYPES.EVENT_CHAT);
+    // Refresh unresolved updates
+    setUnresolvedUpdates(getUnresolvedUpdates());
+  }, []);
+
+  const handleUpdateClick = (update) => {
+    const activity = findActivityById(update.eventId);
+    
+    // Resolve based on update type
+    switch (update.type) {
+      case UPDATE_TYPES.EVENT_CHAT:
+        // Open Activity Details → Chat tab
+        if (activity) {
+          setSelectedActivity(activity);
+          // Resolve event_chat updates for this event when chat is opened
+          resolveUpdatesByEventAndType(update.eventId, UPDATE_TYPES.EVENT_CHAT);
+        } else {
+          // Event no longer exists
+          resolveUpdate(update.id);
+          setToast("This event is no longer available.");
+        }
+        break;
+        
+      case UPDATE_TYPES.JOIN_REQUEST:
+        // Open Activity Details for host to approve/decline
+        // Note: Actual resolution happens when host accepts/declines
+        if (activity) {
+          setSelectedActivity(activity);
+          // Don't resolve yet - wait for host action
+        } else {
+          resolveUpdate(update.id);
+          setToast("This event is no longer available.");
+        }
+        break;
+        
+      case UPDATE_TYPES.JOIN_APPROVED:
+      case UPDATE_TYPES.JOIN_DECLINED:
+        // Open Activity Details to show status
+        if (activity) {
+          setSelectedActivity(activity);
+        }
+        // Resolve immediately after viewing
+        resolveUpdate(update.id);
+        break;
+        
+      case UPDATE_TYPES.EVENT_UPDATED:
+        // Open Activity Details to show changes
+        if (activity) {
+          setSelectedActivity(activity);
+        }
+        resolveUpdate(update.id);
+        break;
+        
+      case UPDATE_TYPES.EVENT_CANCELLED:
+        // Show cancellation info
+        if (activity) {
+          setSelectedActivity(activity);
+        }
+        resolveUpdate(update.id);
+        break;
+        
+      case UPDATE_TYPES.PARTICIPANT_LEFT:
+        // Open Activity Details to show updated participant list
+        if (activity) {
+          setSelectedActivity(activity);
+        }
+        resolveUpdate(update.id);
+        break;
+        
+      default:
+        resolveUpdate(update.id);
+    }
+    
+    // Refresh unresolved updates list
+    setUnresolvedUpdates(getUnresolvedUpdates());
+    
+    // Switch to community tab where ActivityDetailsModal will be shown
+    if (activity) {
+      setActiveTab("community");
+    }
+  };
+
   const handleRequestToJoin = (activity) => {
     if (!activity) return;
 
@@ -4333,6 +4470,12 @@ function BreakLoopConfig({
       );
     }
     
+    // Resolve join_request updates for this event (Phase E-2d)
+    if (activity?.id) {
+      resolveUpdatesByEventAndType(activity.id, UPDATE_TYPES.JOIN_REQUEST);
+      setUnresolvedUpdates(getUnresolvedUpdates());
+    }
+    
     setToast("Request accepted");
   };
 
@@ -4347,6 +4490,12 @@ function BreakLoopConfig({
         currentUserId,
         currentUser.name
       );
+    }
+    
+    // Resolve join_request updates for this event (Phase E-2d)
+    if (activity?.id) {
+      resolveUpdatesByEventAndType(activity.id, UPDATE_TYPES.JOIN_REQUEST);
+      setUnresolvedUpdates(getUnresolvedUpdates());
     }
     
     setToast("Request declined");
@@ -5536,34 +5685,48 @@ function BreakLoopConfig({
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-white scrollbar-hide">
-                  {(state.chatMessages[state.activeChatFriend.id] || [])
-                    .length > 0 ? (
-                    state.chatMessages[state.activeChatFriend.id].map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`flex flex-col ${
-                          msg.sender === "me" ? "items-end" : "items-start"
-                        }`}
-                      >
-                        <div
-                          className={`max-w-[80%] px-4 py-2 rounded-2xl text-sm ${
-                            msg.sender === "me"
-                              ? "bg-blue-600 text-white rounded-tr-none"
-                              : "bg-slate-100 text-slate-800 rounded-tl-none"
-                          }`}
-                        >
-                          {msg.text}
-                        </div>
-                        <span className="text-[10px] text-slate-400 mt-1 px-1">
-                          {msg.time}
-                        </span>
+                  {(() => {
+                    const conversationId = getConversationId(currentUserId, state.activeChatFriend.id);
+                    const conversation = getConversation(conversationId);
+                    const messages = conversation?.messages || [];
+                    
+                    return messages.length > 0 ? (
+                      messages.map((msg) => {
+                        const isMe = msg.senderId === currentUserId;
+                        const timestamp = new Date(msg.createdAt);
+                        const timeStr = timestamp.toLocaleTimeString('en-US', { 
+                          hour: 'numeric', 
+                          minute: '2-digit' 
+                        });
+                        
+                        return (
+                          <div
+                            key={msg.id}
+                            className={`flex flex-col ${
+                              isMe ? "items-end" : "items-start"
+                            }`}
+                          >
+                            <div
+                              className={`max-w-[80%] px-4 py-2 rounded-2xl text-sm ${
+                                isMe
+                                  ? "bg-blue-600 text-white rounded-tr-none"
+                                  : "bg-slate-100 text-slate-800 rounded-tl-none"
+                              }`}
+                            >
+                              {msg.text}
+                            </div>
+                            <span className="text-[10px] text-slate-400 mt-1 px-1">
+                              {timeStr}
+                            </span>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="text-center text-slate-400 text-xs py-10">
+                        Start a mindful conversation.
                       </div>
-                    ))
-                  ) : (
-                    <div className="text-center text-slate-400 text-xs py-10">
-                      Start a mindful conversation.
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
 
                 <div className="p-3 bg-slate-50 border-t border-slate-100 flex gap-2">
@@ -6101,6 +6264,210 @@ function BreakLoopConfig({
           </div>
         )}
 
+        {activeTab === "inbox" && (
+          <div className="h-full flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="p-6 pb-3">
+              <h2 className="text-2xl font-bold text-slate-800">Inbox</h2>
+            </div>
+
+            {/* Sub-tabs */}
+            <div className="px-6 flex gap-2 border-b border-slate-200">
+              <button
+                onClick={() => setInboxSubTab("messages")}
+                className={`px-4 py-2 text-sm font-bold transition-colors relative ${
+                  inboxSubTab === "messages"
+                    ? "text-blue-600"
+                    : "text-slate-400 hover:text-slate-600"
+                }`}
+              >
+                Messages
+                {(() => {
+                  const unreadCount = getUnreadConversationCount(currentUserId);
+                  return unreadCount > 0 && (
+                    <span className="ml-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-[16px] inline-flex items-center justify-center px-1">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  );
+                })()}
+                {inboxSubTab === "messages" && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
+                )}
+              </button>
+              <button
+                onClick={() => setInboxSubTab("updates")}
+                className={`px-4 py-2 text-sm font-bold transition-colors relative ${
+                  inboxSubTab === "updates"
+                    ? "text-blue-600"
+                    : "text-slate-400 hover:text-slate-600"
+                }`}
+              >
+                Updates
+                {unresolvedUpdates.length > 0 && (
+                  <span className="ml-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-[16px] inline-flex items-center justify-center px-1">
+                    {unresolvedUpdates.length > 99 ? '99+' : unresolvedUpdates.length}
+                  </span>
+                )}
+                {inboxSubTab === "updates" && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
+                )}
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto">
+              {inboxSubTab === "messages" && (() => {
+                const conversations = getAllConversationsSorted();
+                
+                return conversations.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                    <MessageCircle size={48} className="text-slate-300 mb-3" />
+                    <h3 className="text-lg font-bold text-slate-700 mb-1">No messages yet</h3>
+                    <p className="text-sm text-slate-400 max-w-xs">
+                      Private conversations with friends will appear here.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-6 space-y-2">
+                    {conversations.map((conversation) => {
+                      const otherUserId = getOtherParticipantId(conversation, currentUserId);
+                      const otherUser = state.friendsList?.find(f => f.id === otherUserId);
+                      const lastMessage = conversation.messages[conversation.messages.length - 1];
+                      const isMyMessage = lastMessage?.senderId === currentUserId;
+                      const timestamp = lastMessage?.createdAt ? formatRelativeTime(lastMessage.createdAt) : '';
+                      const isUnread = isConversationUnread(conversation, currentUserId);
+                      
+                      // Fallback if friend not found in list
+                      const displayName = otherUser?.name || 'Unknown';
+                      const displayAvatar = otherUser?.avatar || 'bg-slate-400';
+                      
+                      return (
+                        <button
+                          key={conversation.id}
+                          onClick={() => {
+                            if (otherUser) {
+                              openChat(otherUser);
+                              setActiveTab("community");
+                            }
+                          }}
+                          className="w-full bg-white border border-slate-200 rounded-xl p-4 hover:bg-slate-50 transition-colors text-left"
+                        >
+                          <div className="flex gap-3">
+                            <div className={`w-10 h-10 rounded-full ${displayAvatar} flex items-center justify-center text-white font-bold flex-shrink-0 relative`}>
+                              {displayName[0]}
+                              {isUnread && (
+                                <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-blue-500 border-2 border-white rounded-full"></div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className={`text-sm ${isUnread ? 'font-bold text-slate-900' : 'font-medium text-slate-800'}`}>
+                                  {displayName}
+                                </span>
+                                <span className="text-xs text-slate-400">
+                                  {timestamp}
+                                </span>
+                              </div>
+                              <p className={`text-xs truncate ${isUnread ? 'text-slate-700 font-medium' : 'text-slate-500'}`}>
+                                {isMyMessage && 'You: '}{lastMessage?.text || ''}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              {inboxSubTab === "updates" && (
+                <div className="p-6 space-y-2">
+                  {unresolvedUpdates.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <Bell size={48} className="text-slate-300 mb-3" />
+                      <h3 className="text-lg font-bold text-slate-700 mb-1">All caught up!</h3>
+                      <p className="text-sm text-slate-400 max-w-xs">
+                        You have no pending updates. New activity changes and messages will appear here.
+                      </p>
+                    </div>
+                  ) : (
+                    unresolvedUpdates.map((update) => {
+                      const activity = findActivityById(update.eventId);
+                      const eventTitle = activity?.title || "Unknown Event";
+                      
+                      // Generate update text and icon based on type
+                      let updateText = "";
+                      let updateIcon = null;
+                      
+                      switch (update.type) {
+                        case UPDATE_TYPES.EVENT_CHAT:
+                          updateText = `New message in '${eventTitle}'`;
+                          updateIcon = <MessageCircle size={20} className="text-blue-500" />;
+                          break;
+                        case UPDATE_TYPES.JOIN_REQUEST:
+                          updateText = `Join request for '${eventTitle}'`;
+                          updateIcon = <UserPlus size={20} className="text-purple-500" />;
+                          break;
+                        case UPDATE_TYPES.JOIN_APPROVED:
+                          updateText = `Your request was approved for '${eventTitle}'`;
+                          updateIcon = <Check size={20} className="text-green-500" />;
+                          break;
+                        case UPDATE_TYPES.JOIN_DECLINED:
+                          updateText = `Your request was declined for '${eventTitle}'`;
+                          updateIcon = <X size={20} className="text-red-500" />;
+                          break;
+                        case UPDATE_TYPES.EVENT_UPDATED:
+                          updateText = `'${eventTitle}' was updated`;
+                          updateIcon = <Edit2 size={20} className="text-orange-500" />;
+                          break;
+                        case UPDATE_TYPES.EVENT_CANCELLED:
+                          updateText = `'${eventTitle}' was cancelled`;
+                          updateIcon = <AlertTriangle size={20} className="text-red-500" />;
+                          break;
+                        case UPDATE_TYPES.PARTICIPANT_LEFT:
+                          updateText = `${update.actorName || 'Someone'} left '${eventTitle}'`;
+                          updateIcon = <UserMinus size={20} className="text-slate-500" />;
+                          break;
+                        default:
+                          updateText = `Update for '${eventTitle}'`;
+                          updateIcon = <Bell size={20} className="text-slate-400" />;
+                      }
+                      
+                      return (
+                        <button
+                          key={update.id}
+                          onClick={() => handleUpdateClick(update)}
+                          className="w-full bg-white border border-slate-200 rounded-xl p-4 hover:bg-slate-50 transition-colors text-left"
+                        >
+                          <div className="flex gap-3">
+                            <div className="flex-shrink-0 mt-0.5">
+                              {updateIcon}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-slate-800 mb-1">
+                                {updateText}
+                              </p>
+                              {update.message && (
+                                <p className="text-xs text-slate-500 mb-1 truncate">
+                                  {update.message}
+                                </p>
+                              )}
+                              <p className="text-xs text-slate-400">
+                                {formatRelativeTime(update.createdAt)}
+                              </p>
+                            </div>
+                            <ChevronRight size={16} className="text-slate-300 flex-shrink-0 mt-1" />
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeTab === "settings" && (
           <div className="p-6 space-y-6">
             <h2 className="text-2xl font-bold text-slate-800">Settings</h2>
@@ -6519,6 +6886,13 @@ function BreakLoopConfig({
           onClick={() => setActiveTab("community")}
         />
         <NavIcon
+          icon={<Inbox size={20} />}
+          label="Inbox"
+          active={activeTab === "inbox"}
+          onClick={() => setActiveTab("inbox")}
+          badge={getUnresolvedCount() + getUnreadConversationCount(currentUserId)}
+        />
+        <NavIcon
           icon={<Settings size={20} />}
           label="Settings"
           active={activeTab === "settings"}
@@ -6574,6 +6948,7 @@ function BreakLoopConfig({
         onCancelRequest={handleCancelRequest}
         onAcceptRequest={handleAcceptRequest}
         onDeclineRequest={handleDeclineRequest}
+        onChatOpened={handleChatOpened}
         upcomingActivities={state.upcomingActivities || []}
         pendingRequests={state.pendingRequests || []}
         requests={
@@ -7002,14 +7377,21 @@ const DockIcon = ({ bg, icon }) => (
     {icon}
   </button>
 );
-const NavIcon = ({ icon, label, active, onClick }) => (
+const NavIcon = ({ icon, label, active, onClick, badge }) => (
   <button
     onClick={onClick}
-    className={`flex flex-col items-center gap-1 ${
+    className={`flex flex-col items-center gap-1 relative ${
       active ? "text-blue-600" : "text-slate-400"
     }`}
   >
-    {icon}
+    <div className="relative">
+      {icon}
+      {badge > 0 && (
+        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-1">
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
+    </div>
     <span className="text-[10px] font-bold">{label}</span>
   </button>
 );

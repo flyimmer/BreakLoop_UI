@@ -117,6 +117,30 @@ src/
     - `emitParticipantLeftUpdate()` - Participant quit event
   - Storage key: `event_updates_v1`
   - Data model: `EventUpdate { id, type, eventId, actorId, actorName, message, createdAt, resolved }`
+- **Inbox** (`utils/inbox.js`):
+  - Inbox utility functions (Phase E-2d)
+  - Manages unresolved updates and resolution logic
+  - `getUnresolvedUpdates()` - Fetch unresolved updates sorted by time
+  - `getUnresolvedCount()` - Calculate badge count
+  - `resolveUpdate(updateId)` - Mark single update as resolved
+  - `resolveUpdatesByEvent(eventId)` - Resolve all updates for an event
+  - `resolveUpdatesByEventAndType(eventId, type)` - Type-specific resolution
+  - `formatRelativeTime(timestamp)` - Human-readable timestamps (e.g., "2m ago", "3h ago")
+  - Consumes data from `event_updates_v1`
+- **Private Messages** (`utils/privateMessages.js`):
+  - Private (friend-to-friend) messaging utilities
+  - Manages private conversations separate from event group chat
+  - `getConversationId(userId1, userId2)` - Generate deterministic conversation ID
+  - `loadPrivateConversations()` - Load from localStorage
+  - `savePrivateConversations(conversations)` - Save to localStorage
+  - `getOrCreateConversation(userId1, userId2)` - Get or create conversation
+  - `addMessageToConversation(conversationId, message)` - Add message to conversation
+  - `getAllConversationsSorted()` - Get all conversations sorted by last message
+  - `getConversation(conversationId)` - Get specific conversation
+  - `getOtherParticipantId(conversation, currentUserId)` - Find other user in conversation
+  - `migrateOldChatMessages(oldChatMessages, currentUserId)` - One-time migration from old format
+  - Storage key: `private_messages_v1`
+  - Data model: `PrivateConversation { id, participantIds, messages, createdAt, lastMessageAt }`
 - **Host Labels** (`constants/hostLabels.js`):
   - `HOST_LABELS_CARD` - Compact labels for activity cards ("Friend", "Public", "My plan")
   - `HOST_LABELS_MODAL` - Descriptive labels for modals ("Friend activity", "Public event")
@@ -356,7 +380,12 @@ Three modes accessible via Community tab:
 ### Event Update Signal System (Phase E-2c)
 
 **Purpose:**  
-A unified architectural system for emitting structured update signals when event-related actions occur. These signals are stored but not yet rendered, preparing the foundation for Inbox v1 implementation.
+A unified architectural system for emitting structured update signals when event-related actions occur. These signals are consumed by Inbox v1 (Phase E-2d).
+
+### Inbox v1 (Phase E-2d)
+
+**Purpose:**  
+Provides a dedicated coordination surface for users to receive and manage event-related updates. The Inbox is a top-level tab with two sub-tabs: Messages (placeholder) and Updates (fully functional).
 
 **Architecture:**
 - All event-related actions emit `EventUpdate` objects
@@ -411,18 +440,111 @@ A unified architectural system for emitting structured update signals when event
    - Actor: User who quit
 
 **Design Constraints:**
-- No UI added in Phase E-2c
-- No Inbox rendering
-- No notification delivery (push/badge/toast)
-- No unread logic
-- No automatic resolution
-- Updates append-only (no deduplication yet)
+- No UI added in Phase E-2c (data-only)
+- Updates append-only (no deduplication)
 
-**Future Integration:**
-- Phase E-2d: Inbox v1 will consume these updates
-- Updates will render as items in Inbox → Updates tab
-- Tapping update will deep-link to relevant context
-- Resolution logic will mark updates as acknowledged
+**Inbox v1 Architecture (Phase E-2d):**
+
+**Location:** `src/utils/inbox.js` - Inbox utility functions  
+**Navigation:** Bottom tab between Community and Settings  
+**Badge:** Shows unresolved update count (Community is NEVER badged)
+
+**Sub-tabs:**
+1. **Messages** - Placeholder only, shows "No messages yet" empty state
+2. **Updates** - Fully functional, renders all unresolved EventUpdate items
+
+**Update Rendering:**
+- Type-specific icons and text for all 7 update types
+- Sorted by time (most recent first)
+- Shows event title, optional message preview, and relative timestamp
+- Tappable items with deep-linking to Activity Details
+
+**Resolution Logic:**
+- `event_chat` → Resolves when Chat tab opened in Activity Details
+- `join_request` → Resolves when host accepts/declines
+- `join_approved` / `join_declined` → Resolves immediately when activity opened
+- `event_updated` / `event_cancelled` / `participant_left` → Resolves immediately when activity opened
+- Updates removed from list after resolution
+- Badge count automatically decrements
+
+**Integration Points:**
+- `ActivityDetailsModal` calls `onChatOpened()` when Chat tab opens
+- `handleAcceptRequest()` and `handleDeclineRequest()` resolve join_request updates
+- `handleUpdateClick()` handles deep-linking and type-specific resolution
+
+### Private Messaging System
+
+**Purpose:**  
+Provides unified private (friend-to-friend) messaging accessible from multiple entry points. Completely separate from event group chat.
+
+**Architecture:**
+
+**Entry Points:**
+1. Community → Friends list → Chat icon
+2. Community → Friend profile → Chat button
+3. Inbox → Messages → Conversation list
+
+**Data Storage:**
+- Single source of truth: `private_messages_v1` in localStorage
+- Format: `{ [conversationId]: PrivateConversation }`
+- Conversation ID: Deterministic based on sorted participant IDs (`conv_userId1_userId2`)
+
+**Message Flow:**
+- User sends message → `handleSendChatMessage()` → `addMessageToConversation()` → localStorage
+- Chat UI reads from `getConversation(conversationId)`
+- Inbox reads from `getAllConversationsSorted()`
+- Both views show same data
+
+**Key Features:**
+- Automatic migration from old `chatMessages` format (runs once)
+- Conversations sorted by last message time
+- Last message preview in Inbox
+- Proper timestamps (shown as "9:30 AM" in chat, "2m ago" in list)
+- Opens same conversation regardless of entry point
+
+**Separation from Event Chat:**
+- Private messages: Friend-to-friend, stored in `private_messages_v1`
+- Event chat: Group chat per event, stored in `event_chat_state_v1`
+- No overlap or confusion between the two systems
+
+### Unread & Resolution Semantics (Phase E-2e)
+
+**Purpose:**  
+Implement correct, minimal, non-coercive unread and resolution logic for Inbox v1 to ensure users are informed without pressure.
+
+**Private Messages — Unread Logic:**
+- Conversation is UNREAD if:
+  - Latest message sent by OTHER user
+  - Conversation not opened since that message
+- Conversation marked READ when user opens it
+- All messages in conversation marked read together
+- No read receipts sent to other user
+- `lastReadAt` field tracks read state per conversation
+
+**Updates — Resolution Logic:**
+- Updates remain UNRESOLVED until explicit user action
+- Resolution rules per type (unchanged from Phase E-2d)
+- Opening Inbox does NOT auto-resolve updates
+- Must open specific context or take action
+
+**Badge Logic:**
+- **Inbox tab badge:** `unreadConversations + unresolvedUpdates`
+- **Messages badge:** Count of unread conversations
+- **Updates badge:** Count of unresolved updates
+- **Other tabs:** NEVER badged (Community, Insights, Settings)
+- Badges update immediately when state changes
+- No color escalation, pulsing, or animation
+
+**Key Functions:**
+- `isConversationUnread(conversation, userId)` - Check if conversation has unread messages
+- `markConversationAsRead(conversationId)` - Mark conversation as read
+- `getUnreadConversationCount(userId)` - Count unread conversations
+
+**Stability Rules:**
+- If user ignores Inbox → unread state remains as-is
+- No escalation occurs
+- No reminders or nudges
+- Unread indicates STATE, not OBLIGATION
 
 ### State Persistence Keys
 When debugging or resetting state, be aware of these localStorage keys:
@@ -430,7 +552,9 @@ When debugging or resetting state, be aware of these localStorage keys:
 - `mindful_*_v17_6` - Settings and friends (includes new privacy fields)
 - `community_mock_state_v2` - Community activities and requests
 - `event_chat_state_v1` - Event Group Chat messages (Phase E-2b)
-- `event_updates_v1` - Event update signals for Inbox (Phase E-2c)
+- `event_updates_v1` - Event update signals consumed by Inbox (Phase E-2c/E-2d)
+- `private_messages_v1` - Private friend-to-friend conversations (unified messaging)
+- `private_messages_migrated_v1` - Migration flag for one-time chatMessages migration
 
 ### Quick Task System
 - Allows brief monitored app usage without full intervention

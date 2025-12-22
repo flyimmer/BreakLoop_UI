@@ -37,6 +37,7 @@ export function ActivityDetailsModal({
   onCancelActivity,
   onQuitActivity,
   onCancelRequest,
+  onChatOpened,
   requests = [],
   upcomingActivities = [],
   pendingRequests = [],
@@ -103,6 +104,13 @@ export function ActivityDetailsModal({
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, activeSection]);
+
+  // Resolve event_chat updates when chat tab is opened (Phase E-2d)
+  useEffect(() => {
+    if (activeSection === "chat" && activity?.id && onChatOpened) {
+      onChatOpened(activity.id);
+    }
+  }, [activeSection, activity?.id, onChatOpened]);
 
   // Determine if user can access chat
   // User can chat if they are host OR confirmed participant
