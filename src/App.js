@@ -202,13 +202,13 @@ function TargetIcon({ size }) {
 }
 
 const VALUE_CARDS = [
-  { id: "work", label: "Career", icon: "💼" },
+  { id: "work", label: "Work", icon: "💼" },
   { id: "sports", label: "Health", icon: "🏃" },
-  { id: "partner", label: "Love", icon: "❤️" },
-  { id: "kids", label: "Kids", icon: "🧸" },
+  { id: "partner", label: "Relationships", icon: "❤️" },
+  { id: "kids", label: "Family", icon: "🧸" },
   { id: "reading", label: "Reading", icon: "📚" },
-  { id: "nature", label: "Nature", icon: "🌲" },
-  { id: "friends", label: "Social", icon: "🥂" },
+  { id: "nature", label: "Outdoors", icon: "🌲" },
+  { id: "friends", label: "Friends", icon: "🥂" },
 ];
 
 const INITIAL_APPS = [
@@ -5290,8 +5290,11 @@ function BreakLoopConfig({
           </p>
           {onboardingStep === 0 && (
             <>
-              <h2 className="text-lg font-bold mb-4">Step 1: Your Values</h2>
-              <div className="flex-1 grid grid-cols-2 gap-3 overflow-y-auto content-start pb-4">
+              <h2 className="text-lg font-bold mb-4">Step 1: What do you want more time for?</h2>
+              <p className="text-slate-400 mb-4 text-xs leading-snug">
+                Choose what you'd like to protect time for when you put your phone down.
+              </p>
+              <div className="flex-1 grid grid-cols-2 gap-y-4 gap-x-3 overflow-y-auto content-start pb-4">
                 {state.availableValueCards.map((c) => (
                   <button
                     key={c.id}
@@ -5306,21 +5309,24 @@ function BreakLoopConfig({
                           c.id,
                         ]);
                     }}
-                    className={`p-4 rounded-xl border-2 text-left ${
+                    className={`p-4 rounded-xl border text-left ${
                       state.selectedValues.includes(c.id)
                         ? "border-blue-500 bg-blue-50 text-blue-700"
                         : "border-slate-200 bg-white"
                     }`}
                   >
-                    <div className="text-2xl mb-1">{c.icon}</div>
+                    <div className="text-xl mb-1">{c.icon}</div>
                     <div className="text-xs font-bold">{c.label}</div>
                   </button>
                 ))}
               </div>
+              <p className="text-xs text-slate-400 text-center mb-3">
+                You can change this later.
+              </p>
               <button
                 onClick={() => setOnboardingStep(1)}
                 disabled={state.selectedValues.length === 0}
-                className="mt-auto w-full bg-blue-600 text-white py-3 rounded-xl font-bold disabled:opacity-50"
+                className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold disabled:opacity-50"
               >
                 Next
               </button>
@@ -8128,6 +8134,10 @@ const AppSelectionScreen = ({
   const [url, setUrl] = useState("");
   return (
     <>
+      <h2 className="text-lg font-bold mb-2">Choose apps to be mindful about</h2>
+      <p className="text-slate-500 mb-4 text-sm">
+        Pick where you'd like gentle check-ins.
+      </p>
       <div className="flex bg-slate-100 p-1 rounded-lg mb-4">
         <button
           onClick={() => setTab("app")}
