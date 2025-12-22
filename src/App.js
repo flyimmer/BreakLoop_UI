@@ -96,6 +96,14 @@ import { useStickyState } from "./hooks/useStickyState";
 import { callGemini, GEMINI_API_KEY } from "./utils/gemini";
 import { getIcon } from "./utils/icons";
 import {
+  emitJoinRequestUpdate,
+  emitJoinApprovedUpdate,
+  emitJoinDeclinedUpdate,
+  emitEventUpdatedUpdate,
+  emitEventCancelledUpdate,
+  emitParticipantLeftUpdate,
+} from "./utils/eventUpdates";
+import {
   addMinutes,
   formatQuickTaskDuration,
   formatSeconds,
@@ -1194,6 +1202,10 @@ export default function App() {
     communityDefaults.current.currentActivity || null
   );
   const [userSessionState, setUserSessionState] = useState(null);
+
+  // EVENT UPDATES STATE (Phase E-2c)
+  // Stores event-related update signals for future Inbox consumption
+  const [eventUpdates, setEventUpdates] = useState([]);
 
   // CHAT STATE
   const [activeChatFriend, setActiveChatFriend] = useState(null);
@@ -4298,18 +4310,45 @@ function BreakLoopConfig({
       return newState;
     });
 
+    // Emit event update signal (Phase E-2c)
+    emitJoinRequestUpdate(
+      activity.id,
+      currentUserId,
+      currentUser.name
+    );
+
     setToast("The host has been informed and will decide whether you can join this activity");
   };
 
   const handleAcceptRequest = (activity, request) => {
     if (!request) return;
     actions.setCommunityData((prev) => acceptJoinRequestState(prev, request));
+    
+    // Emit event update signal (Phase E-2c)
+    if (activity?.id) {
+      emitJoinApprovedUpdate(
+        activity.id,
+        currentUserId,
+        currentUser.name
+      );
+    }
+    
     setToast("Request accepted");
   };
 
   const handleDeclineRequest = (activity, request) => {
     if (!request) return;
     actions.setCommunityData((prev) => declineJoinRequestState(prev, request));
+    
+    // Emit event update signal (Phase E-2c)
+    if (activity?.id) {
+      emitJoinDeclinedUpdate(
+        activity.id,
+        currentUserId,
+        currentUser.name
+      );
+    }
+    
     setToast("Request declined");
   };
 
@@ -4522,6 +4561,14 @@ function BreakLoopConfig({
     const readableDate = formatDateLabel(data.date || todayIso);
     const timeLabel = buildTimeLabel(data.time, data.endTime);
     
+    // Emit event update signal (Phase E-2c)
+    emitEventUpdatedUpdate(
+      activityToEdit.id,
+      currentUserId,
+      currentUser.name,
+      "Event details updated"
+    );
+    
     actions.setCommunityData((prev) => ({
       ...prev,
       upcomingActivities: prev.upcomingActivities.map((act) =>
@@ -4567,6 +4614,13 @@ function BreakLoopConfig({
   const handleCancelActivity = (activity) => {
     if (!activity) return;
     
+    // Emit event update signal (Phase E-2c)
+    emitEventCancelledUpdate(
+      activity.id,
+      currentUserId,
+      currentUser.name
+    );
+    
     // Remove from upcomingActivities
     actions.setCommunityData((prev) => ({
       ...prev,
@@ -4590,6 +4644,13 @@ function BreakLoopConfig({
 
   const handleQuitActivity = (activity) => {
     if (!activity) return;
+    
+    // Emit event update signal (Phase E-2c)
+    emitParticipantLeftUpdate(
+      activity.id,
+      currentUserId,
+      currentUser.name
+    );
     
     // Remove from user's upcomingActivities (only the user's participation)
     actions.setCommunityData((prev) => ({

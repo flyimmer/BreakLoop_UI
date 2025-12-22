@@ -23,6 +23,7 @@ import {
   generateMessageId,
   formatMessageTime,
 } from "../utils/eventChat";
+import { emitEventChatUpdate } from "../utils/eventUpdates";
 
 export function ActivityDetailsModal({
   activity,
@@ -130,6 +131,14 @@ export function ActivityDetailsModal({
     const updatedMessages = addEventMessage(activity.id, newMessage);
     setMessages(updatedMessages);
     setMessageInput("");
+
+    // Emit event update signal (Phase E-2c)
+    emitEventChatUpdate(
+      activity.id,
+      currentUserId,
+      senderName,
+      messageInput.trim()
+    );
 
     // Focus input after sending
     if (chatInputRef.current) {

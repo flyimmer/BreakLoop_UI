@@ -78,6 +78,7 @@ src/
 ├── utils/                      # Reusable utility functions
 │   ├── activityMatching.js    # Activity ID matching logic
 │   ├── eventChat.js           # Event Group Chat storage and utilities
+│   ├── eventUpdates.js        # Event Update Signal System (Phase E-2c)
 │   ├── gemini.js              # Gemini API integration
 │   ├── icons.js               # Icon mapping for apps
 │   └── time.js                # Time/date formatting and parsing utilities
@@ -101,6 +102,21 @@ src/
   - `formatMessageTime(timestamp)` - Format relative timestamps (e.g., "2m ago", "3h ago")
   - Storage key: `event_chat_state_v1`
   - Data model: `{ [eventId]: EventChatMessage[] }`
+- **Event Updates** (`utils/eventUpdates.js`):
+  - Event update signal emission system (Phase E-2c)
+  - Creates structured update objects for event-related actions
+  - `createEventUpdate()` - Create EventUpdate object
+  - `addEventUpdate()` - Add update to storage and emit debug log
+  - Signal emitters:
+    - `emitEventChatUpdate()` - New message in event chat
+    - `emitJoinRequestUpdate()` - User requested to join
+    - `emitJoinApprovedUpdate()` - Host approved join request
+    - `emitJoinDeclinedUpdate()` - Host declined join request
+    - `emitEventUpdatedUpdate()` - Event details edited
+    - `emitEventCancelledUpdate()` - Host cancelled event
+    - `emitParticipantLeftUpdate()` - Participant quit event
+  - Storage key: `event_updates_v1`
+  - Data model: `EventUpdate { id, type, eventId, actorId, actorName, message, createdAt, resolved }`
 - **Host Labels** (`constants/hostLabels.js`):
   - `HOST_LABELS_CARD` - Compact labels for activity cards ("Friend", "Public", "My plan")
   - `HOST_LABELS_MODAL` - Descriptive labels for modals ("Friend activity", "Public event")
@@ -337,12 +353,84 @@ Three modes accessible via Community tab:
 
 ## Important Implementation Details
 
+### Event Update Signal System (Phase E-2c)
+
+**Purpose:**  
+A unified architectural system for emitting structured update signals when event-related actions occur. These signals are stored but not yet rendered, preparing the foundation for Inbox v1 implementation.
+
+**Architecture:**
+- All event-related actions emit `EventUpdate` objects
+- Updates stored in localStorage (`event_updates_v1`)
+- Updates logged to console for debugging
+- No UI rendering in this phase (data-only)
+
+**EventUpdate Data Model:**
+```javascript
+{
+  id: string                    // Unique update ID
+  type: string                  // One of: event_chat, join_request, join_approved, 
+                                //   join_declined, event_updated, event_cancelled, 
+                                //   participant_left
+  eventId: string              // Associated event ID
+  actorId: string              // User who triggered the update
+  actorName: string            // Display name of actor
+  message: string              // Short preview or description (optional)
+  createdAt: number            // Timestamp
+  resolved: boolean            // Always false (resolution logic in future phase)
+}
+```
+
+**Emission Points:**
+1. **Event Chat Message Sent** → `event_chat` update
+   - Location: `ActivityDetailsModal.handleSendMessage()`
+   - Includes message text preview (truncated to 50 chars)
+
+2. **Join Request Created** → `join_request` update
+   - Location: `App.handleRequestToJoin()`
+   - Actor: User requesting to join
+
+3. **Join Request Accepted** → `join_approved` update
+   - Location: `App.handleAcceptRequest()`
+   - Actor: Host who accepted
+
+4. **Join Request Declined** → `join_declined` update
+   - Location: `App.handleDeclineRequest()`
+   - Actor: Host who declined
+
+5. **Event Updated** → `event_updated` update
+   - Location: `App.handleUpdateActivity()`
+   - Actor: User who edited the event
+   - Message: "Event details updated"
+
+6. **Event Cancelled** → `event_cancelled` update
+   - Location: `App.handleCancelActivity()`
+   - Actor: Host who cancelled
+
+7. **Participant Left** → `participant_left` update
+   - Location: `App.handleQuitActivity()`
+   - Actor: User who quit
+
+**Design Constraints:**
+- No UI added in Phase E-2c
+- No Inbox rendering
+- No notification delivery (push/badge/toast)
+- No unread logic
+- No automatic resolution
+- Updates append-only (no deduplication yet)
+
+**Future Integration:**
+- Phase E-2d: Inbox v1 will consume these updates
+- Updates will render as items in Inbox → Updates tab
+- Tapping update will deep-link to relevant context
+- Resolution logic will mark updates as acknowledged
+
 ### State Persistence Keys
 When debugging or resetting state, be aware of these localStorage keys:
 - `mindful_*_v17_2` - Main app state (values, monitored apps, plan, etc.)
 - `mindful_*_v17_6` - Settings and friends (includes new privacy fields)
 - `community_mock_state_v2` - Community activities and requests
 - `event_chat_state_v1` - Event Group Chat messages (Phase E-2b)
+- `event_updates_v1` - Event update signals for Inbox (Phase E-2c)
 
 ### Quick Task System
 - Allows brief monitored app usage without full intervention
