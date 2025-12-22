@@ -77,6 +77,7 @@ src/
 │   └── hostLabels.js          # Activity host type labels (card/modal variants)
 ├── utils/                      # Reusable utility functions
 │   ├── activityMatching.js    # Activity ID matching logic
+│   ├── eventChat.js           # Event Group Chat storage and utilities
 │   ├── gemini.js              # Gemini API integration
 │   ├── icons.js               # Icon mapping for apps
 │   └── time.js                # Time/date formatting and parsing utilities
@@ -90,6 +91,16 @@ src/
 - **Activity Matching** (`utils/activityMatching.js`):
   - `findUpcomingActivity()` - Complex ID matching with 6 different strategies
   - Used by both `ActivityCard` and `ActivityDetailsModal` for consistent status checking
+- **Event Chat** (`utils/eventChat.js`):
+  - Event-scoped chat message storage and retrieval
+  - `loadEventChatState()` - Load all event chat state from localStorage
+  - `saveEventChatState()` - Persist event chat state
+  - `getEventMessages(eventId)` - Get messages for specific event
+  - `addEventMessage(eventId, message)` - Add message to event's chat
+  - `generateMessageId()` - Generate unique message IDs
+  - `formatMessageTime(timestamp)` - Format relative timestamps (e.g., "2m ago", "3h ago")
+  - Storage key: `event_chat_state_v1`
+  - Data model: `{ [eventId]: EventChatMessage[] }`
 - **Host Labels** (`constants/hostLabels.js`):
   - `HOST_LABELS_CARD` - Compact labels for activity cards ("Friend", "Public", "My plan")
   - `HOST_LABELS_MODAL` - Descriptive labels for modals ("Friend activity", "Public event")
@@ -129,12 +140,26 @@ src/
   - Badge logic matches `ActivityDetailsModal` for consistency across all views
   - Uses `findUpcomingActivity()` from `utils/activityMatching.js` for status checking
   - Uses `HOST_LABELS_CARD` from `constants/hostLabels.js` for host type display
-- `ActivityDetailsModal` - Full-screen modal for viewing/managing activities
-  - Host actions: Edit activity, Cancel event
-  - Participant actions: Join event, Cancel request, Quit event
-  - Checks `upcomingActivities` to determine if user has joined
-  - Request management for hosts (accept/decline join requests)
-  - Uses shared `findUpcomingActivity()` and `HOST_LABELS_MODAL` utilities
+- `ActivityDetailsModal` - Full-screen contextual view for viewing/managing activities
+  - **Structure**: Three-section tabbed interface (Details / Chat / Participants)
+  - **Details Section**:
+    - Host actions: Edit activity, Cancel event
+    - Participant actions: Join event, Cancel request, Quit event
+    - Checks `upcomingActivities` to determine if user has joined
+    - Uses shared `findUpcomingActivity()` and `HOST_LABELS_MODAL` utilities
+  - **Chat Section** (Event Group Chat v0.1 - Phase E-2b):
+    - Event-scoped messaging (chat belongs to the event)
+    - Message list with sender name and timestamps
+    - Text input with send button
+    - Access control: Only host and confirmed participants can chat
+    - Messages stored per event using `utils/eventChat.js`
+    - Auto-scroll to bottom on new messages
+    - Empty state: "No messages yet" with helpful text
+    - Restricted state: "Chat is available once you are confirmed" for pending users
+  - **Participants Section**:
+    - Confirmed participants list (host always shown first)
+    - Pending requests management (host-only, with Accept/Decline actions)
+  - Full-screen layout with header, section tabs, and close button
 - `PlanActivityModal` - AI-powered or manual activity planning interface
   - Supports both create and edit modes
   - Edit mode pre-populates form with existing activity data
@@ -317,6 +342,7 @@ When debugging or resetting state, be aware of these localStorage keys:
 - `mindful_*_v17_2` - Main app state (values, monitored apps, plan, etc.)
 - `mindful_*_v17_6` - Settings and friends (includes new privacy fields)
 - `community_mock_state_v2` - Community activities and requests
+- `event_chat_state_v1` - Event Group Chat messages (Phase E-2b)
 
 ### Quick Task System
 - Allows brief monitored app usage without full intervention
