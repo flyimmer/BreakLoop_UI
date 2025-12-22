@@ -4106,6 +4106,16 @@ function BreakLoopConfig({
   // Community tab horizontal menu (friends | my-upcoming | discover | plan)
   const [communityMenu, setCommunityMenu] = useState("friends");
   const [activityToEdit, setActivityToEdit] = useState(null);
+  // Registration modal state
+  const [showRegistrationModal, setShowRegistrationModal] = useState(false);
+  const [pendingFriendRequest, setPendingFriendRequest] = useState(null);
+  // Invite modal state
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [generatedInviteLink, setGeneratedInviteLink] = useState(null);
+  // Invite acceptance state
+  const [pendingInviteToken, setPendingInviteToken] = useState(null);
+  // Friend request modal state
+  const [showFriendRequestModal, setShowFriendRequestModal] = useState(null);
 
   // New states for Friends/Buddies
   const [isAddingFriend, setIsAddingFriend] = useState(false);
@@ -4391,6 +4401,248 @@ function BreakLoopConfig({
     setUnresolvedUpdates(getUnresolvedUpdates());
   }, []);
 
+  // FRIEND REQUEST HANDLER
+  const handleAddFriend = useCallback((participant) => {
+    // Check if user is logged in / registered
+    if (!state.userAccount.loggedIn) {
+      // Store pending request and show registration modal
+      setPendingFriendRequest(participant);
+      setShowRegistrationModal(true);
+      return;
+    }
+
+    // Import friend request utilities
+    const { createFriendRequest, findExistingRequest, areAlreadyFriends } = require('./utils/friendRequests');
+    const { emitFriendRequestUpdate } = require('./utils/eventUpdates');
+
+    // Double-check eligibility
+    if (areAlreadyFriends(currentUserId, participant.id, friendsList)) {
+      setToast("You are already friends");
+      return;
+    }
+
+    if (findExistingRequest(currentUserId, participant.id)) {
+      setToast("Friend request already pending");
+      return;
+    }
+
+    // Create friend request
+    const request = createFriendRequest(
+      currentUserId,
+      currentUser.name,
+      participant.id,
+      participant.name
+    );
+
+    // Emit friend request update to Inbox
+    emitFriendRequestUpdate(
+      currentUserId,
+      currentUser.name,
+      participant.id,
+      request.id
+    );
+
+    setToast(`Friend request sent to ${participant.name}`);
+  }, [state.userAccount.loggedIn, currentUserId, currentUser.name, friendsList]);
+
+  // INVITE LINK HANDLER (defined before handleCompleteRegistration to avoid circular dependency)
+  const handleOpenInviteLink = useCallback((token) => {
+    const { validateInvite, markInviteAsUsed } = require('./utils/invites');
+    const { createFriendRequest } = require('./utils/friendRequests');
+    const { emitFriendRequestUpdate } = require('./utils/eventUpdates');
+
+    // Validate invite
+    const validation = validateInvite(token);
+    
+    if (!validation.valid) {
+      setToast(validation.reason);
+      return;
+    }
+
+    const invite = validation.invite;
+
+    // Check if user is logged in
+    if (!state.userAccount.loggedIn) {
+      // Store pending invite and show registration
+      setPendingInviteToken(token);
+      setShowRegistrationModal(true);
+      return;
+    }
+
+    // Check if trying to use own invite
+    if (invite.fromUserId === currentUserId) {
+      setToast("You cannot use your own invite link");
+      return;
+    }
+
+    // Mark invite as used
+    markInviteAsUsed(token, currentUserId);
+
+    // Create friend request FROM invitee TO inviter
+    const request = createFriendRequest(
+      currentUserId,
+      currentUser.name,
+      invite.fromUserId,
+      invite.fromUserName
+    );
+
+    // Emit friend request update for inviter
+    emitFriendRequestUpdate(
+      currentUserId,
+      currentUser.name,
+      invite.fromUserId,
+      request.id
+    );
+
+    setToast(`Friend request sent to ${invite.fromUserName}!`);
+    setPendingInviteToken(null);
+  }, [state.userAccount.loggedIn, currentUserId, currentUser.name]);
+
+  // REGISTRATION HANDLER
+  const handleCompleteRegistration = useCallback((name, email) => {
+    // Update user account to logged in
+    actions.setUserAccount({
+      ...state.userAccount,
+      loggedIn: true,
+      name: name || state.userAccount.name,
+      email: email || state.userAccount.email,
+    });
+
+    setToast("Account created successfully!");
+    setShowRegistrationModal(false);
+
+    // If there's a pending friend request, resume it
+    if (pendingFriendRequest) {
+      // Use setTimeout to allow state to update
+      setTimeout(() => {
+        handleAddFriend(pendingFriendRequest);
+        setPendingFriendRequest(null);
+      }, 100);
+    }
+
+    // If there's a pending invite, process it
+    if (pendingInviteToken) {
+      // Use setTimeout to allow state to update
+      setTimeout(() => {
+        handleOpenInviteLink(pendingInviteToken);
+      }, 100);
+    }
+  }, [state.userAccount, pendingFriendRequest, pendingInviteToken, handleAddFriend, handleOpenInviteLink, actions]);
+
+  // INVITE HANDLER
+  const handleGenerateInvite = useCallback(() => {
+    // Check if user is logged in
+    if (!state.userAccount.loggedIn) {
+      // Close invite modal before showing registration
+      setShowInviteModal(false);
+      setShowRegistrationModal(true);
+      return;
+    }
+
+    const { createInvite, generateInviteLink } = require('./utils/invites');
+    
+    // Create invite
+    const invite = createInvite(currentUserId, currentUser.name);
+    
+    // Generate shareable link
+    const inviteLink = generateInviteLink(invite.token);
+    
+    setGeneratedInviteLink(inviteLink);
+    setToast("Invite link generated!");
+  }, [state.userAccount.loggedIn, currentUserId, currentUser.name]);
+
+  const handleShareInvite = useCallback(() => {
+    if (!generatedInviteLink) return;
+
+    // Try to use Web Share API if available
+    if (navigator.share) {
+      navigator.share({
+        title: 'Join me on BreakLoop',
+        text: 'Join me on BreakLoop to support each other in mindful tech use!',
+        url: generatedInviteLink,
+      }).then(() => {
+        setToast("Invite shared!");
+        setShowInviteModal(false);
+        setGeneratedInviteLink(null);
+      }).catch((err) => {
+        // User cancelled or error occurred
+        console.log('Share cancelled or failed:', err);
+      });
+    } else {
+      // Fallback: Copy to clipboard
+      navigator.clipboard.writeText(generatedInviteLink).then(() => {
+        setToast("Invite link copied to clipboard!");
+        setShowInviteModal(false);
+        setGeneratedInviteLink(null);
+      }).catch(() => {
+        setToast("Failed to copy link");
+      });
+    }
+  }, [generatedInviteLink]);
+
+  // FRIEND REQUEST ACCEPTANCE HANDLERS
+  const handleAcceptFriendRequest = useCallback((update) => {
+    const { updateFriendRequestStatus } = require('./utils/friendRequests');
+    const { resolveUpdate } = require('./utils/inbox');
+    
+    // Find the friend request ID from the update's eventId (which is the request ID)
+    const requestId = update.eventId;
+    
+    // Update friend request status
+    updateFriendRequestStatus(requestId, 'accepted');
+    
+    // Add friend to friendsList
+    const newFriend = {
+      id: update.actorId,
+      name: update.actorName,
+      successRate: Math.floor(Math.random() * 40) + 50,
+      avatar: "bg-slate-400",
+      rank: friendsList.length + 1,
+      status: "accepted",
+      buddyStatus: "none",
+      alternatives: [],
+      isFavorite: false,
+      note: "",
+    };
+    
+    actions.setFriendsList([...friendsList, newFriend]);
+    
+    // Resolve the update
+    resolveUpdate(update.id);
+    setUnresolvedUpdates(getUnresolvedUpdates());
+    
+    // Close modal
+    setShowFriendRequestModal(null);
+    
+    // Show success message
+    setToast(`You and ${update.actorName} are now friends!`);
+    
+    // TODO: Emit "friend accepted" update for both users
+  }, [friendsList, actions]);
+
+  const handleDeclineFriendRequest = useCallback((update) => {
+    const { updateFriendRequestStatus } = require('./utils/friendRequests');
+    const { resolveUpdate } = require('./utils/inbox');
+    
+    // Find the friend request ID from the update's eventId
+    const requestId = update.eventId;
+    
+    // Update friend request status
+    updateFriendRequestStatus(requestId, 'declined');
+    
+    // Resolve the update
+    resolveUpdate(update.id);
+    setUnresolvedUpdates(getUnresolvedUpdates());
+    
+    // Close modal
+    setShowFriendRequestModal(null);
+    
+    // Show message
+    setToast("Friend request declined");
+    
+    // No notification sent to requester (as per requirements)
+  }, []);
+
   const handleUpdateClick = (update) => {
     const activity = findActivityById(update.eventId);
     
@@ -4459,6 +4711,12 @@ function BreakLoopConfig({
           setSelectedActivity(activity);
         }
         resolveUpdate(update.id);
+        break;
+        
+      case UPDATE_TYPES.FRIEND_REQUEST:
+        // Show friend request modal for accept/decline
+        setShowFriendRequestModal(update);
+        // Don't resolve yet - wait for user action
         break;
         
       default:
@@ -6068,7 +6326,7 @@ function BreakLoopConfig({
                             </h3>
                           </div>
                           <button
-                            onClick={() => setIsAddingFriend(true)}
+                            onClick={() => setShowInviteModal(true)}
                             className="text-xs text-blue-500 font-bold bg-blue-50 px-2 py-1 rounded-md flex items-center gap-1"
                           >
                             <UserPlus size={12} /> Add
@@ -6501,6 +6759,10 @@ function BreakLoopConfig({
                           updateText = `${update.actorName || 'Someone'} left '${eventTitle}'`;
                           updateIcon = <UserMinus size={20} className="text-slate-500" />;
                           break;
+                        case UPDATE_TYPES.FRIEND_REQUEST:
+                          updateText = `Friend request from ${update.actorName}`;
+                          updateIcon = <UserPlus size={20} className="text-green-500" />;
+                          break;
                         default:
                           updateText = `Update for '${eventTitle}'`;
                           updateIcon = <Bell size={20} className="text-slate-400" />;
@@ -6588,6 +6850,39 @@ function BreakLoopConfig({
                 defaults on refresh. Turn it off to keep your progress.
               </p>
             </div>
+
+            {/* Test Invite Link (Debug) */}
+            {state.demoMode && (
+              <div className="bg-amber-50 rounded-2xl p-5 border border-amber-200 shadow-sm">
+                <h3 className="font-bold text-amber-900 flex items-center gap-2 mb-3">
+                  <Key size={18} /> Test Invite Link
+                </h3>
+                <p className="text-xs text-amber-700 mb-3">
+                  Simulate opening an invite link to test the friend invitation flow
+                </p>
+                <button
+                  onClick={() => {
+                    // Get the most recent invite token from localStorage
+                    const { loadInvites } = require('./utils/invites');
+                    const invites = loadInvites();
+                    const activeInvites = invites.filter(inv => inv.status === 'active');
+                    
+                    if (activeInvites.length === 0) {
+                      setToast("No active invites found. Generate one first from Friends → Add");
+                      return;
+                    }
+                    
+                    // Use the most recent invite
+                    const latestInvite = activeInvites[activeInvites.length - 1];
+                    handleOpenInviteLink(latestInvite.token);
+                  }}
+                  className="w-full bg-amber-600 text-white font-bold py-2.5 rounded-xl text-sm hover:bg-amber-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <UserPlus size={16} />
+                  Open Latest Invite Link
+                </button>
+              </div>
+            )}
 
             {/* My Profile Section */}
             <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
@@ -6845,10 +7140,16 @@ function BreakLoopConfig({
                 </>
               ) : (
                 <div className="space-y-2">
-                  <button className="w-full bg-blue-600 text-white font-bold py-2 rounded-xl text-xs">
+                  <button 
+                    onClick={() => setShowRegistrationModal(true)}
+                    className="w-full bg-blue-600 text-white font-bold py-2 rounded-xl text-xs"
+                  >
                     Sign In
                   </button>
-                  <button className="w-full border border-slate-200 text-slate-600 font-bold py-2 rounded-xl text-xs">
+                  <button 
+                    onClick={() => setShowRegistrationModal(true)}
+                    className="w-full border border-slate-200 text-slate-600 font-bold py-2 rounded-xl text-xs"
+                  >
                     Register
                   </button>
                 </div>
@@ -7220,6 +7521,159 @@ function BreakLoopConfig({
         onCreateGroup={(data) => addGroupActivity(data)}
       />
 
+      {/* Registration Modal */}
+      {showRegistrationModal && (
+        <div className="absolute inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+            <h3 className="text-lg font-bold text-slate-800 mb-2">Create Account</h3>
+            <p className="text-sm text-slate-600 mb-4">
+              {pendingFriendRequest 
+                ? `Create an account to send a friend request to ${pendingFriendRequest.name}`
+                : "Create an account to add friends and join activities"}
+            </p>
+            
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Name</label>
+                <input
+                  type="text"
+                  id="reg-name"
+                  defaultValue={state.userAccount.name}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Your name"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">Email</label>
+                <input
+                  type="email"
+                  id="reg-email"
+                  defaultValue={state.userAccount.email}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="your@email.com"
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setShowRegistrationModal(false);
+                  setPendingFriendRequest(null);
+                }}
+                className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 font-bold rounded-xl text-sm hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const name = document.getElementById('reg-name').value.trim();
+                  const email = document.getElementById('reg-email').value.trim();
+                  if (name && email) {
+                    handleCompleteRegistration(name, email);
+                  } else {
+                    setToast("Please enter your name and email");
+                  }
+                }}
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white font-bold rounded-xl text-sm hover:bg-blue-700"
+              >
+                Create Account
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite Friend Modal */}
+      {showInviteModal && (
+        <div className="absolute inset-0 bg-black/50 z-50 flex items-end justify-center">
+          <div className="bg-white rounded-t-3xl w-full max-w-md shadow-xl animate-in slide-in-from-bottom duration-300">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-slate-800">Add Friend</h3>
+                <button
+                  onClick={() => {
+                    setShowInviteModal(false);
+                    setGeneratedInviteLink(null);
+                  }}
+                  className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                >
+                  <X size={20} className="text-slate-600" />
+                </button>
+              </div>
+
+              {!generatedInviteLink ? (
+                <div className="space-y-3">
+                  <button
+                    onClick={handleGenerateInvite}
+                    className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-3 hover:bg-blue-700 transition-colors"
+                  >
+                    <UserPlus size={20} />
+                    <span>Invite someone</span>
+                  </button>
+                  <p className="text-xs text-slate-500 text-center">
+                    Share a link with someone you know to connect on BreakLoop
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <p className="text-xs font-bold text-slate-600 mb-2">Your invite link:</p>
+                    <p className="text-xs text-slate-800 break-all font-mono bg-white p-2 rounded border border-slate-200">
+                      {generatedInviteLink}
+                    </p>
+                  </div>
+                  
+                  <button
+                    onClick={handleShareInvite}
+                    className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-3 hover:bg-blue-700 transition-colors"
+                  >
+                    <Send size={20} />
+                    <span>Share link</span>
+                  </button>
+                  
+                  <p className="text-xs text-slate-500 text-center">
+                    Send this link via WhatsApp, SMS, email, or any messaging app
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Friend Request Modal */}
+      {showFriendRequestModal && (
+        <div className="absolute inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+            <div className="flex flex-col items-center text-center mb-6">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                <UserPlus size={32} className="text-green-600" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-800 mb-2">Friend Request</h3>
+              <p className="text-sm text-slate-600">
+                <span className="font-bold">{showFriendRequestModal.actorName}</span> wants to add you as a friend
+              </p>
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleDeclineFriendRequest(showFriendRequestModal)}
+                className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 font-bold rounded-xl text-sm hover:bg-slate-50"
+              >
+                Decline
+              </button>
+              <button
+                onClick={() => handleAcceptFriendRequest(showFriendRequestModal)}
+                className="flex-1 px-4 py-2.5 bg-green-600 text-white font-bold rounded-xl text-sm hover:bg-green-700"
+              >
+                Accept
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <AltSchedulerModal
         isOpen={state.showAltScheduler}
         activity={state.altPlanDraft || state.selectedAlternative}
@@ -7248,8 +7702,10 @@ function BreakLoopConfig({
         onAcceptRequest={handleAcceptRequest}
         onDeclineRequest={handleDeclineRequest}
         onChatOpened={handleChatOpened}
+        onAddFriend={handleAddFriend}
         upcomingActivities={state.upcomingActivities || []}
         pendingRequests={state.pendingRequests || []}
+        friendsList={state.friendsList || []}
         requests={
           selectedActivity
             ? (

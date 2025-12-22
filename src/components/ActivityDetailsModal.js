@@ -14,6 +14,7 @@ import {
   MessageCircle,
   ChevronLeft,
   Send,
+  UserPlus,
 } from "lucide-react";
 import { HOST_LABELS_MODAL } from "../constants/hostLabels";
 import { findUpcomingActivity } from "../utils/activityMatching";
@@ -24,6 +25,10 @@ import {
   formatMessageTime,
 } from "../utils/eventChat";
 import { emitEventChatUpdate } from "../utils/eventUpdates";
+import {
+  findExistingRequest,
+  areAlreadyFriends,
+} from "../utils/friendRequests";
 
 export function ActivityDetailsModal({
   activity,
@@ -39,9 +44,11 @@ export function ActivityDetailsModal({
   onQuitActivity,
   onCancelRequest,
   onChatOpened,
+  onAddFriend,
   requests = [],
   upcomingActivities = [],
   pendingRequests = [],
+  friendsList = [],
 }) {
   if (!activity) return null;
 
@@ -377,82 +384,140 @@ export function ActivityDetailsModal({
     );
   };
 
-  const renderParticipantsSection = () => (
-    <div className="flex-1 overflow-y-auto p-5 space-y-4">
-      {/* Confirmed participants */}
-      <div>
-        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
-          Confirmed
-        </div>
-        <div className="space-y-2">
-          {/* Host always shows first */}
-          <div className="p-3 rounded-xl border border-slate-100 bg-slate-50 flex items-center justify-between">
-            <div>
-              <div className="text-sm font-bold text-slate-800">
-                {activity.hostName || "You"}
-              </div>
-              <div className="text-[11px] text-slate-500">Host</div>
-            </div>
-            <Shield size={16} className="text-slate-400" />
-          </div>
-          {/* TODO: Add confirmed participants list */}
-          {/* Placeholder for now */}
-        </div>
-      </div>
-
-      {/* Pending requests - only visible to host */}
-      {isHost && requests?.length > 0 && (
+  const renderParticipantsSection = () => {
+    // Get confirmed participants from activity.participants array
+    const confirmedParticipants = activity.participants || [];
+    
+    // Helper function to check if "Add friend" button should be shown for a participant
+    const shouldShowAddFriend = (participant) => {
+      // Don't show for current user
+      if (participant.id === currentUserId) return false;
+      
+      // Don't show if already friends
+      if (areAlreadyFriends(currentUserId, participant.id, friendsList)) return false;
+      
+      // Don't show if there's already a pending request (either direction)
+      if (findExistingRequest(currentUserId, participant.id)) return false;
+      
+      return true;
+    };
+    
+    return (
+      <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        {/* Confirmed participants */}
         <div>
           <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
-            Pending Requests
+            Confirmed
           </div>
           <div className="space-y-2">
-            {requests.map((req) => (
-              <div
-                key={req.id}
-                className="p-3 rounded-xl border border-slate-100 bg-slate-50 flex items-center justify-between gap-2"
-              >
+            {confirmedParticipants.length === 0 ? (
+              /* Show host if no participants array */
+              <div className="p-3 rounded-xl border border-slate-100 bg-slate-50 flex items-center justify-between">
                 <div>
                   <div className="text-sm font-bold text-slate-800">
-                    {req.requesterName}
+                    {activity.hostName || "You"}
                   </div>
-                  <div className="text-[11px] text-slate-500">
-                    {req.status === "pending" ? "Pending" : req.status}
-                  </div>
+                  <div className="text-[11px] text-slate-500">Host</div>
                 </div>
-                {req.status === "pending" ? (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => onAcceptRequest?.(activity, req)}
-                      className="text-xs font-bold bg-emerald-50 text-emerald-700 px-2 py-1 rounded-lg border border-emerald-100"
-                    >
-                      Accept
-                    </button>
-                    <button
-                      onClick={() => onDeclineRequest?.(activity, req)}
-                      className="text-xs font-bold bg-red-50 text-red-600 px-2 py-1 rounded-lg border border-red-100"
-                    >
-                      Decline
-                    </button>
-                  </div>
-                ) : (
-                  <div className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
-                    {req.status}
-                  </div>
-                )}
+                <Shield size={16} className="text-slate-400" />
               </div>
-            ))}
+            ) : (
+              /* Render all confirmed participants */
+              confirmedParticipants.map((participant) => {
+                const isParticipantHost = participant.id === activity.hostId || participant.status === "hosting";
+                const isCurrentUser = participant.id === currentUserId;
+                const showAddFriend = shouldShowAddFriend(participant);
+                
+                return (
+                  <div
+                    key={participant.id}
+                    className="p-3 rounded-xl border border-slate-100 bg-slate-50 flex items-center justify-between gap-2"
+                  >
+                    <div className="flex-1">
+                      <div className="text-sm font-bold text-slate-800">
+                        {isCurrentUser ? "You" : participant.name}
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        {isParticipantHost ? "Host" : "Participant"}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {isParticipantHost && (
+                        <Shield size={16} className="text-slate-400" />
+                      )}
+                      
+                      {showAddFriend && (
+                        <button
+                          onClick={() => onAddFriend?.(participant)}
+                          className="text-xs font-medium text-slate-600 hover:text-blue-600 transition-colors flex items-center gap-1"
+                        >
+                          <UserPlus size={14} />
+                          Add friend
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
-      )}
 
-      {isHost && (!requests || requests.length === 0) && (
-        <div className="text-center text-slate-400 py-8">
-          <p className="text-sm">No pending requests</p>
-        </div>
-      )}
-    </div>
-  );
+        {/* Pending requests - only visible to host */}
+        {isHost && requests?.length > 0 && (
+          <div>
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+              Pending Requests
+            </div>
+            <div className="space-y-2">
+              {requests.map((req) => (
+                <div
+                  key={req.id}
+                  className="p-3 rounded-xl border border-slate-100 bg-slate-50 flex items-center justify-between gap-2"
+                >
+                  <div>
+                    <div className="text-sm font-bold text-slate-800">
+                      {req.requesterName}
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      {req.status === "pending" ? "Pending" : req.status}
+                    </div>
+                  </div>
+                  {req.status === "pending" ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => onAcceptRequest?.(activity, req)}
+                        className="text-xs font-bold bg-emerald-50 text-emerald-700 px-2 py-1 rounded-lg border border-emerald-100"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        onClick={() => onDeclineRequest?.(activity, req)}
+                        className="text-xs font-bold bg-red-50 text-red-600 px-2 py-1 rounded-lg border border-red-100"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
+                      {req.status}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {isHost && (!requests || requests.length === 0) && confirmedParticipants.length <= 1 && (
+          <div className="text-center text-slate-400 py-8">
+            <p className="text-sm">No pending requests</p>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="absolute inset-0 bg-white z-50 flex flex-col">

@@ -20,6 +20,7 @@ export const UPDATE_TYPES = {
   EVENT_UPDATED: 'event_updated',
   EVENT_CANCELLED: 'event_cancelled',
   PARTICIPANT_LEFT: 'participant_left',
+  FRIEND_REQUEST: 'friend_request',
 };
 
 /**
@@ -230,6 +231,25 @@ export function emitParticipantLeftUpdate(eventId, participantId, participantNam
       eventId,
       actorId: participantId,
       actorName: participantName,
+    })
+  );
+}
+
+/**
+ * Emit a friend request update
+ * @param {string} fromUserId - ID of user sending the request
+ * @param {string} fromUserName - Name of user sending the request
+ * @param {string} toUserId - ID of user receiving the request
+ * @param {string} requestId - Unique friend request ID
+ */
+export function emitFriendRequestUpdate(fromUserId, fromUserName, toUserId, requestId) {
+  return addEventUpdate(
+    createEventUpdate({
+      type: UPDATE_TYPES.FRIEND_REQUEST,
+      eventId: requestId, // Use requestId as eventId for friend requests
+      actorId: fromUserId,
+      actorName: fromUserName,
+      message: `${fromUserName} wants to add you as a friend`,
     })
   );
 }

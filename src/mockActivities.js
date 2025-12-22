@@ -65,6 +65,18 @@ export const FRIEND_SHARED_ACTIVITIES = [
     hostName: "Thomas",
     visibility: "friends",
     status: "confirmed",
+    participants: [
+      {
+        id: "f2",
+        name: "Thomas",
+        status: "hosting",
+      },
+      {
+        id: "f3",
+        name: "Sarah",
+        status: "confirmed",
+      },
+    ],
   },
   {
     id: "fa2",
@@ -78,6 +90,18 @@ export const FRIEND_SHARED_ACTIVITIES = [
     hostName: "Hans",
     visibility: "friends",
     status: "confirmed",
+    participants: [
+      {
+        id: "f1",
+        name: "Hans",
+        status: "hosting",
+      },
+      {
+        id: "f2",
+        name: "Thomas",
+        status: "confirmed",
+      },
+    ],
   },
 ];
 
@@ -95,6 +119,23 @@ export const PUBLIC_EVENTS = [
     visibility: "public",
     maxParticipants: 30,
     status: "confirmed",
+    participants: [
+      {
+        id: "org-1",
+        name: "Community Center",
+        status: "hosting",
+      },
+      {
+        id: "f3",
+        name: "Sarah",
+        status: "confirmed",
+      },
+      {
+        id: "f1",
+        name: "Hans",
+        status: "confirmed",
+      },
+    ],
   },
   {
     id: "pe2",
@@ -109,6 +150,28 @@ export const PUBLIC_EVENTS = [
     visibility: "public",
     maxParticipants: 12,
     status: "confirmed",
+    participants: [
+      {
+        id: "org-2",
+        name: "Neighborhood Hub",
+        status: "hosting",
+      },
+      {
+        id: "f2",
+        name: "Thomas",
+        status: "confirmed",
+      },
+      {
+        id: "f3",
+        name: "Sarah",
+        status: "confirmed",
+      },
+      {
+        id: "f1",
+        name: "Hans",
+        status: "confirmed",
+      },
+    ],
   },
 ];
 
