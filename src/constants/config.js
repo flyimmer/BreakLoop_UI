@@ -46,3 +46,12 @@ export const DEFAULT_USER_ACCOUNT = {
   streak: 3,
   isPremium: false,
 };
+
+// Default user profile configuration (My Profile v1)
+export const DEFAULT_USER_PROFILE = {
+  displayName: "",
+  aboutMe: "",
+  interests: "",
+  photos: [], // Array of photo URLs/data URIs
+  primaryPhoto: null, // URL/data URI of primary photo
+};

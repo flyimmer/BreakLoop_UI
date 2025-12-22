@@ -92,6 +92,8 @@ import {
   Key,
   ArrowLeft,
   Inbox,
+  Camera,
+  Image,
 } from "lucide-react";
 import { useStickyState } from "./hooks/useStickyState";
 import { callGemini, GEMINI_API_KEY } from "./utils/gemini";
@@ -165,6 +167,7 @@ import {
   DEFAULT_MONITORED_APPS,
   DEFAULT_SETTINGS,
   DEFAULT_USER_ACCOUNT,
+  DEFAULT_USER_PROFILE,
   DEFAULT_QUICK_TASK_DURATION,
   DEFAULT_QUICK_TASK_LIMIT,
 } from "./constants/config";
@@ -762,6 +765,10 @@ const FRIENDS_LEADERBOARD = [
     recentMood: "anxiety",
     currentActivity: "Knitting",
     activity: "Reading at Cafe",
+    displayName: "Sarah Chen",
+    primaryPhoto: "https://i.pravatar.cc/150?img=5",
+    aboutMe: "Creative soul who finds peace in crafting and quiet moments. Always learning something new.",
+    interests: "Knitting, reading, cats, mindfulness, cozy cafes",
     alternatives: [
       ALL_ALTS.find((a) => a.id === "bo1") || ALL_ALTS[0],
       ALL_ALTS.find((a) => a.id === "f3") || ALL_ALTS[1],
@@ -789,6 +796,10 @@ const FRIENDS_LEADERBOARD = [
     recentMood: "fatigue",
     currentActivity: "Power Nap",
     activity: null,
+    displayName: "Hans Müller",
+    primaryPhoto: "https://i.pravatar.cc/150?img=33",
+    aboutMe: "Busy professional learning to prioritize rest and recovery. Coffee enthusiast.",
+    interests: "Productivity hacks, coffee, cycling, meditation",
     alternatives: [
       ALL_ALTS.find((a) => a.id === "g2") || ALL_ALTS[0],
       ALL_ALTS.find((a) => a.id === "bo5") || ALL_ALTS[1],
@@ -828,6 +839,10 @@ const FRIENDS_LEADERBOARD = [
     recentMood: "loneliness",
     currentActivity: "Walking",
     activity: "Gaming",
+    displayName: "Thomas Weber",
+    primaryPhoto: "https://i.pravatar.cc/150?img=12",
+    aboutMe: "Tech enthusiast and runner based in Berlin. Trying to find better balance between screen time and real life.",
+    interests: "Running, gaming, tech, outdoor activities, Berlin food scene",
     alternatives: [
       ALL_ALTS.find((a) => a.id === "l3") || ALL_ALTS[0],
       ALL_ALTS.find((a) => a.id === "bo4") || ALL_ALTS[1],
@@ -1062,6 +1077,11 @@ export default function App() {
     DEFAULT_USER_ACCOUNT,
     { disablePersistence: demoMode }
   );
+  const [userProfile, setUserProfile] = useStickyState(
+    "mindful_profile_v1",
+    DEFAULT_USER_PROFILE,
+    { disablePersistence: demoMode }
+  );
   const [quickTaskWindowStart, setQuickTaskWindowStart] = useStickyState(
     "mindful_quick_window_v1",
     0,
@@ -1265,6 +1285,7 @@ export default function App() {
       setSettings({ ...DEFAULT_SETTINGS });
       setCustomApps([...INITIAL_APPS]);
       setUserAccount({ ...DEFAULT_USER_ACCOUNT });
+      setUserProfile({ ...DEFAULT_USER_PROFILE });
       setQuickTaskWindowStart(0);
       setQuickTaskUsesInWindow(0);
       setQuickTaskActiveUntil(0);
@@ -1565,6 +1586,7 @@ export default function App() {
       settings,
       customApps,
       userAccount,
+      userProfile,
       availableValueCards,
       simNotification,
       friendsList,
@@ -1635,6 +1657,7 @@ export default function App() {
       simNotification,
       upcomingActivities,
       userAccount,
+      userProfile,
       userSessionState,
       currentUserId,
       createEventDraft,
@@ -1656,6 +1679,7 @@ export default function App() {
       setCurrentTime,
       setCustomApps,
       setUserAccount,
+      setUserProfile,
       setAvailableValueCards,
       setFriendsList,
       setUpcomingActivities,
@@ -4071,8 +4095,12 @@ function BreakLoopConfig({
   const [isEditingValues, setIsEditingValues] = useState(false);
   const [newValueCard, setNewValueCard] = useState({ label: "", icon: "❤️" });
   const [isEditingApps, setIsEditingApps] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileDraft, setProfileDraft] = useState(null);
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [viewingFriend, setViewingFriend] = useState(null);
+  const [viewingFriendFullProfile, setViewingFriendFullProfile] = useState(false); // true = full profile, false = summary
+  const [showFriendMenu, setShowFriendMenu] = useState(false);
   // Controls the new Plan Activity modal (replaces inline stub card).
   const [showPlanModal, setShowPlanModal] = useState(false);
   // Community tab horizontal menu (friends | my-upcoming | discover | plan)
@@ -5749,170 +5777,223 @@ function BreakLoopConfig({
                 </div>
               </div>
             ) : viewingFriend ? (
-              /* --- FRIEND PROFILE VIEW --- */
-              <div className="flex-1 flex flex-col animate-in slide-in-from-right">
-                <div className="mb-6 flex items-center gap-3">
-                  <button
-                    onClick={() => setViewingFriend(null)}
-                    className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors"
-                  >
-                    <ChevronLeft size={20} />
-                  </button>
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-800">
-                      {viewingFriend.name}'s Profile
-                    </h2>
-                    <p className="text-xs text-slate-500">
-                      Shared Alternatives & Stats
-                    </p>
-                  </div>
-                </div>
-
-                {/* Friend Header Card */}
-                <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 mb-6 relative">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-4">
-                      <div
-                        className={`w-16 h-16 rounded-full ${viewingFriend.avatar} flex items-center justify-center text-white font-bold text-2xl shadow-md`}
-                      >
-                        {viewingFriend.name[0]}
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-2">
+              viewingFriendFullProfile ? (
+                /* --- FULL FRIEND PROFILE (MIRROR OF MY PROFILE - READ ONLY) --- */
+                <div className="flex-1 flex flex-col animate-in slide-in-from-right">
+                  {/* Header */}
+                  <div className="mb-6 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
                       <button
-                        onClick={(e) => handleToggleFavorite(e, viewingFriend)}
-                        className={`p-2 rounded-full border ${
-                          viewingFriend.isFavorite
-                            ? "bg-yellow-100 border-yellow-200 text-yellow-500"
-                            : "bg-slate-50 border-slate-200 text-slate-400"
-                        }`}
+                        onClick={() => {
+                          // Go back from full profile to summary
+                          setViewingFriendFullProfile(false);
+                          setShowFriendMenu(false);
+                        }}
+                        className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors"
                       >
-                        <StarIcon
-                          size={20}
-                          fill={
-                            viewingFriend.isFavorite ? "currentColor" : "none"
-                          }
-                        />
+                        <ChevronLeft size={20} />
                       </button>
-                      <button
-                        onClick={(e) => handleDeleteFriend(e, viewingFriend)}
-                        className="p-2 rounded-full bg-red-50 border border-red-100 text-red-400 hover:bg-red-100"
-                      >
-                        <Trash2 size={20} />
-                      </button>
+                      <h2 className="text-xl font-bold text-slate-800">
+                        {viewingFriend.name}
+                      </h2>
                     </div>
-                  </div>
-
-                  {/* LIVE STATUS SECTION (New) */}
-                  {((state.settings.shareMood && viewingFriend.recentMood) ||
-                    (state.settings.shareActivity &&
-                      viewingFriend.currentActivity)) && (
-                    <div className="grid grid-cols-2 gap-3 mb-4">
-                      {state.settings.shareMood && viewingFriend.recentMood && (
-                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col items-center text-center gap-1">
-                          {(() => {
-                            const mood = CAUSES.find(
-                              (c) => c.id === viewingFriend.recentMood
-                            );
-                            if (!mood) return null;
-                            return (
-                              <>
-                                <div className="text-slate-400 mb-1">
-                                  {React.cloneElement(mood.icon, { size: 18 })}
-                                </div>
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                                  Mood
-                                </div>
-                                <div className="text-xs font-bold text-slate-700">
-                                  {mood.label}
-                                </div>
-                              </>
-                            );
-                          })()}
+                    
+                    {/* Overflow Menu Button */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowFriendMenu(!showFriendMenu)}
+                        className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors"
+                      >
+                        <MoreHorizontal size={20} className="text-slate-600" />
+                      </button>
+                      
+                      {/* Overflow Menu Dropdown */}
+                      {showFriendMenu && (
+                        <div className="absolute right-0 top-12 bg-white rounded-xl shadow-lg border border-slate-200 py-2 w-48 z-10">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleFavorite(e, viewingFriend);
+                              setShowFriendMenu(false);
+                            }}
+                            className="w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center gap-3"
+                          >
+                            <StarIcon
+                              size={16}
+                              className={viewingFriend.isFavorite ? "text-yellow-500" : "text-slate-400"}
+                              fill={viewingFriend.isFavorite ? "currentColor" : "none"}
+                            />
+                            <span className="text-slate-700">
+                              {viewingFriend.isFavorite ? "Unstar friend" : "Star friend"}
+                            </span>
+                          </button>
+                          {viewingFriend.isFavorite && (
+                            <p className="px-4 pb-1 text-[10px] text-slate-400">
+                              Starred for easier access
+                            </p>
+                          )}
+                          <div className="border-t border-slate-100 my-1"></div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(`Remove ${viewingFriend.name} from your friends?`)) {
+                                handleDeleteFriend(e, viewingFriend);
+                                setShowFriendMenu(false);
+                              }
+                            }}
+                            className="w-full px-4 py-2.5 text-left text-sm hover:bg-red-50 flex items-center gap-3 text-red-600"
+                          >
+                            <UserMinus size={16} />
+                            <span>Remove friend</span>
+                          </button>
                         </div>
                       )}
-                      {state.settings.shareActivity &&
-                        viewingFriend.currentActivity && (
-                          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex flex-col items-center text-center gap-1">
-                            <div className="text-slate-400 mb-1">
-                              <Activity size={18} />
-                            </div>
-                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                              Activity
-                            </div>
-                            <div className="text-xs font-bold text-slate-700">
-                              {viewingFriend.currentActivity}
-                            </div>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto space-y-4 pb-20 scrollbar-hide">
+                    {/* Profile Card - Read-Only Mirror of My Profile View Mode */}
+                    <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm space-y-4">
+                      {/* Profile Photo & Display Name */}
+                      <div className="flex items-center gap-3">
+                        {viewingFriend.primaryPhoto ? (
+                          <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-slate-200">
+                            <img 
+                              src={viewingFriend.primaryPhoto} 
+                              alt={viewingFriend.name} 
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className={`w-16 h-16 rounded-full ${viewingFriend.avatar} flex items-center justify-center text-white font-bold text-xl border-2 border-slate-200`}>
+                            {viewingFriend.name[0]}
                           </div>
                         )}
-                    </div>
-                  )}
+                        <div>
+                          <div className="font-bold text-slate-800">
+                            {viewingFriend.displayName || viewingFriend.name}
+                          </div>
+                        </div>
+                      </div>
 
-                  {/* Action Buttons */}
-                  <div className="grid grid-cols-2 gap-3 mb-4">
+                      {/* About Me - Only if shared */}
+                      {viewingFriend.aboutMe && (
+                        <div>
+                          <div className="text-xs font-bold text-slate-600 mb-1">About Me</div>
+                          <p className="text-sm text-slate-700 line-clamp-3">
+                            {viewingFriend.aboutMe}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Interests - Only if shared */}
+                      {viewingFriend.interests && (
+                        <div>
+                          <div className="text-xs font-bold text-slate-600 mb-1">Interests</div>
+                          <p className="text-sm text-slate-700 line-clamp-2">
+                            {viewingFriend.interests}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+              </div>
+              ) : (
+                /* --- FRIEND ACTIVITY SUMMARY (LIGHTWEIGHT VIEW) --- */
+                <div className="flex-1 flex flex-col animate-in slide-in-from-right">
+                  {/* Header with back button */}
+                  <div className="mb-6 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => {
+                          setViewingFriend(null);
+                          setShowFriendMenu(false);
+                        }}
+                        className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors"
+                      >
+                        <ChevronLeft size={20} />
+                      </button>
+                      <h2 className="text-xl font-bold text-slate-800">
+                        {viewingFriend.name}
+                      </h2>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto space-y-4 pb-20 scrollbar-hide">
+                    {/* Identity Header - Clickable to open full profile */}
+                    <button
+                      onClick={() => setViewingFriendFullProfile(true)}
+                      className="w-full bg-white rounded-2xl p-5 border border-slate-100 shadow-sm hover:shadow-md transition-shadow text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        {viewingFriend.primaryPhoto ? (
+                          <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-slate-200">
+                            <img 
+                              src={viewingFriend.primaryPhoto} 
+                              alt={viewingFriend.name} 
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className={`w-16 h-16 rounded-full ${viewingFriend.avatar} flex items-center justify-center text-white font-bold text-xl border-2 border-slate-200`}>
+                            {viewingFriend.name[0]}
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <div className="font-bold text-slate-800 text-lg">
+                            {viewingFriend.displayName || viewingFriend.name}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1">
+                            Tap to view full profile
+                          </div>
+                        </div>
+                        <ChevronRight size={20} className="text-slate-400" />
+                      </div>
+                    </button>
+
+                    {/* Chat Button - Primary Action */}
                     <button
                       onClick={() => openChat(viewingFriend)}
-                      className="bg-blue-600 text-white py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+                      className="w-full bg-blue-600 text-white py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors"
                     >
-                      <MessageCircle size={16} /> Chat
+                      <MessageCircle size={16} /> Chat with {viewingFriend.name}
                     </button>
-                    <button className="bg-slate-100 text-slate-700 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2">
-                      <Phone size={16} /> Call
-                    </button>
-                  </div>
 
-                  {/* Notes Section */}
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                      <StickyNote size={12} /> Notes
-                    </div>
-                    <textarea
-                      className="w-full bg-transparent text-sm text-slate-700 resize-none outline-none placeholder:text-slate-400"
-                      placeholder="Add a note about this friend..."
-                      rows={2}
-                      value={viewingFriend.note || ""}
-                      onChange={(e) =>
-                        handleUpdateNote(viewingFriend.id, e.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto space-y-3 pb-20 scrollbar-hide">
-                  <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-2">
-                    What works for {viewingFriend.name}
-                  </h3>
-                  {viewingFriend.alternatives &&
-                  viewingFriend.alternatives.length > 0 ? (
-                    viewingFriend.alternatives
-                      .filter((alt) => !alt.isPrivate)
-                      .map((alt, i) =>
-                        alt ? (
-                          <div
-                            key={i}
-                            className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex justify-between items-center"
-                          >
-                            <div>
-                              <div className="font-bold text-slate-800">
-                                {alt.title}
-                              </div>
-                              <div className="text-xs text-slate-500">
-                                {alt.desc} • {alt.duration}
-                              </div>
-                            </div>
-                            <div className="text-xs font-bold text-slate-400 flex items-center gap-1">
-                              <Heart size={12} /> {alt.likes || 12}
-                            </div>
+                    {/* Things [Name] is up to */}
+                    {(() => {
+                      // Get all activities hosted by this friend
+                      const friendActivities = [
+                        ...(state.friendSharedActivities || []).filter(act => act.hostId === viewingFriend.id),
+                        ...(state.upcomingActivities || []).filter(act => act.hostId === viewingFriend.id)
+                      ];
+                      
+                      return friendActivities.length > 0 ? (
+                        <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+                          <h3 className="text-xs font-bold text-slate-600 mb-3">
+                            Things {viewingFriend.name} is up to
+                          </h3>
+                          <div className="space-y-2">
+                            {friendActivities.map((activity) => (
+                              <button
+                                key={activity.id}
+                                onClick={() => setSelectedActivity(activity)}
+                                className="w-full bg-slate-50 p-3 rounded-xl border border-slate-100 hover:bg-slate-100 transition-colors text-left"
+                              >
+                                <div className="font-bold text-slate-800 text-sm">
+                                  {activity.title}
+                                </div>
+                                <div className="text-xs text-slate-500 mt-1">
+                                  {activity.date} • {activity.time}
+                                </div>
+                              </button>
+                            ))}
                           </div>
-                        ) : null
-                      )
-                  ) : (
-                    <div className="text-center text-slate-400 py-10 italic">
-                      No public alternatives shared.
-                    </div>
-                  )}
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
                 </div>
-              </div>
+              )
             ) : (
               /* --- MAIN COMMUNITY LIST VIEW --- */
               <div className="flex-1 flex flex-col overflow-hidden">
@@ -6001,7 +6082,10 @@ function BreakLoopConfig({
                             .map((f, i) => (
                               <button
                                 key={i}
-                                onClick={() => setViewingFriend(f)}
+                                onClick={() => {
+                                  setViewingFriend(f);
+                                  setViewingFriendFullProfile(false); // Start with summary view
+                                }}
                                 className="w-full flex items-center justify-between group hover:bg-slate-50 p-2 rounded-xl transition-colors relative border border-transparent hover:border-slate-100"
                               >
                                 <div className="flex items-center gap-3 w-full">
@@ -6496,6 +6580,228 @@ function BreakLoopConfig({
                 When enabled, the app ignores saved data and reloads clean
                 defaults on refresh. Turn it off to keep your progress.
               </p>
+            </div>
+
+            {/* My Profile Section */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                  <User size={18} /> My Profile
+                </h3>
+                {!isEditingProfile && (
+                  <button
+                    onClick={() => {
+                      setProfileDraft({ ...state.userProfile });
+                      setIsEditingProfile(true);
+                    }}
+                    className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
+                  >
+                    Edit profile
+                  </button>
+                )}
+              </div>
+
+              {!isEditingProfile ? (
+                // VIEW MODE - Minimal, read-only
+                <div className="space-y-4">
+                  {/* Profile Photo */}
+                  <div className="flex items-center gap-3">
+                    {state.userProfile.primaryPhoto ? (
+                      <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-slate-200">
+                        <img 
+                          src={state.userProfile.primaryPhoto} 
+                          alt="Profile" 
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center border-2 border-slate-200">
+                        <User size={24} className="text-slate-400" />
+                      </div>
+                    )}
+                    <div>
+                      <div className="font-bold text-slate-800">
+                        {state.userProfile.displayName || "Not set"}
+                      </div>
+                      {!state.userProfile.displayName && (
+                        <div className="text-xs text-slate-400">Tap Edit profile to add your name</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* About Me - Compact */}
+                  {state.userProfile.aboutMe && (
+                    <div>
+                      <div className="text-xs font-bold text-slate-600 mb-1">About Me</div>
+                      <p className="text-sm text-slate-700 line-clamp-3">
+                        {state.userProfile.aboutMe}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Interests - Compact */}
+                  {state.userProfile.interests && (
+                    <div>
+                      <div className="text-xs font-bold text-slate-600 mb-1">Interests</div>
+                      <p className="text-sm text-slate-700 line-clamp-2">
+                        {state.userProfile.interests}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Empty state hint */}
+                  {!state.userProfile.aboutMe && !state.userProfile.interests && (
+                    <p className="text-xs text-slate-400 italic">
+                      Your profile is empty. Tap "Edit profile" to add information.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                // EDIT MODE - Full editing
+                <div className="space-y-4">
+                  {/* Profile Photo Editor */}
+                  <div>
+                    <div className="text-xs font-bold text-slate-600 mb-2">
+                      Profile Photo
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {profileDraft?.primaryPhoto ? (
+                        <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-slate-200">
+                          <img 
+                            src={profileDraft.primaryPhoto} 
+                            alt="Profile" 
+                            className="w-full h-full object-cover"
+                          />
+                          <button
+                            onClick={() => {
+                              setProfileDraft({
+                                ...profileDraft,
+                                primaryPhoto: null,
+                              });
+                            }}
+                            className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center border-2 border-slate-200">
+                          <Camera size={24} className="text-slate-400" />
+                        </div>
+                      )}
+                      <label className="cursor-pointer">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                setProfileDraft({
+                                  ...profileDraft,
+                                  primaryPhoto: event.target.result,
+                                });
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                        <div className="bg-blue-50 text-blue-600 px-3 py-2 rounded-xl text-xs font-bold hover:bg-blue-100 transition-colors">
+                          {profileDraft?.primaryPhoto ? "Change Photo" : "Add Photo"}
+                        </div>
+                      </label>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-2">
+                      Visible to friends once you connect.
+                    </p>
+                  </div>
+
+                  {/* Display Name Input */}
+                  <div>
+                    <div className="text-xs font-bold text-slate-600 mb-2">
+                      Display Name
+                    </div>
+                    <input
+                      type="text"
+                      value={profileDraft?.displayName || ""}
+                      onChange={(e) => {
+                        setProfileDraft({
+                          ...profileDraft,
+                          displayName: e.target.value,
+                        });
+                      }}
+                      placeholder="Your name (optional)"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+                    />
+                  </div>
+
+                  {/* About Me Input */}
+                  <div>
+                    <div className="text-xs font-bold text-slate-600 mb-2">
+                      About Me
+                    </div>
+                    <textarea
+                      value={profileDraft?.aboutMe || ""}
+                      onChange={(e) => {
+                        setProfileDraft({
+                          ...profileDraft,
+                          aboutMe: e.target.value,
+                        });
+                      }}
+                      placeholder="Tell others a bit about yourself (optional)"
+                      rows={3}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 resize-none"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Examples: "I enjoy quiet activities and walks." or "Usually free evenings."
+                    </p>
+                  </div>
+
+                  {/* Preferences / Interests Input */}
+                  <div>
+                    <div className="text-xs font-bold text-slate-600 mb-2">
+                      Preferences / Interests
+                    </div>
+                    <textarea
+                      value={profileDraft?.interests || ""}
+                      onChange={(e) => {
+                        setProfileDraft({
+                          ...profileDraft,
+                          interests: e.target.value,
+                        });
+                      }}
+                      placeholder="Your interests or preferences (optional)"
+                      rows={2}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 resize-none"
+                    />
+                  </div>
+
+                  {/* Save / Cancel Buttons */}
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      onClick={() => {
+                        actions.setUserProfile(profileDraft);
+                        setIsEditingProfile(false);
+                        setProfileDraft(null);
+                      }}
+                      className="flex-1 bg-blue-600 text-white font-bold py-2.5 rounded-xl text-sm hover:bg-blue-700 transition-colors"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditingProfile(false);
+                        setProfileDraft(null);
+                      }}
+                      className="flex-1 border border-slate-200 text-slate-600 font-bold py-2.5 rounded-xl text-sm hover:bg-slate-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Account Section */}
