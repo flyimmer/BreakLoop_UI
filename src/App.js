@@ -5615,9 +5615,14 @@ function BreakLoopConfig({
           <div className="p-6 space-y-6">
             <div>
               <div className="flex justify-between items-center mb-3 px-1">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  My "Why"
-                </h3>
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-500 tracking-wide">
+                    Your values
+                  </h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    These help frame how you want to use your time.
+                  </p>
+                </div>
                 <button
                   onClick={() => setIsEditingValues(true)}
                   className="text-blue-500"
@@ -5690,7 +5695,7 @@ function BreakLoopConfig({
                     : formatScreenTime(SCREEN_TIME_DATA.month.totalMinutes)}
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
-                  Total usage {statsPeriod.toLowerCase()}
+                  Screen time {statsPeriod.toLowerCase()}
                 </div>
               </div>
               <div className="flex items-end gap-2 h-44 pt-8 border-b border-slate-100 pb-4 overflow-x-auto">
@@ -5840,9 +5845,9 @@ function BreakLoopConfig({
               {/* Top Insight */}
               <div className="bg-white/10 p-4 rounded-xl mb-4 border border-white/5">
                 <p className="text-sm leading-relaxed">
-                  You scroll mostly when you are{" "}
+                  We notice a pattern: scrolling tends to show up during{" "}
                   <span className="font-bold text-teal-300">
-                    {ADVANCED_STATS.topTrigger.label}
+                    {ADVANCED_STATS.topTrigger.label.toLowerCase()}
                   </span>{" "}
                   on{" "}
                   <span className="font-bold text-teal-300">
@@ -5882,10 +5887,10 @@ function BreakLoopConfig({
                 ))}
               </div>
 
-              {/* Continued Use by Trigger */}
+              {/* Patterns by Trigger */}
               <div className="space-y-3 mt-6">
-                <h4 className="text-xs font-bold text-white/50 uppercase tracking-wider mb-2">
-                  Continued Use by Trigger
+                <h4 className="text-xs font-semibold text-white/40 tracking-wide mb-2">
+                  Patterns by trigger
                 </h4>
                 {ADVANCED_STATS.causeFail.map((item, i) => (
                   <div key={i} className="flex items-center gap-3">
@@ -5899,7 +5904,7 @@ function BreakLoopConfig({
                     <div className="flex-1">
                       <div className="flex justify-between text-xs font-bold mb-1">
                         <span>{item.label}</span>
-                        <span>{item.rate}%</span>
+                        <span className="text-white/50 font-normal">{item.rate}%</span>
                       </div>
                       <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
                         <div
@@ -5911,35 +5916,38 @@ function BreakLoopConfig({
                         ></div>
                       </div>
                     </div>
-                    <div className="text-xs font-bold text-white/30 w-4 text-right">
-                      #{i + 1}
-                    </div>
                   </div>
                 ))}
               </div>
 
-              {/* Top Alternatives */}
+              {/* Helpful Alternatives */}
               <div className="space-y-3 mt-6">
-                <h4 className="text-xs font-bold text-white/50 uppercase tracking-wider mb-2">
-                  Top Alternatives
+                <h4 className="text-xs font-semibold text-white/40 tracking-wide mb-2">
+                  Helpful alternatives
                 </h4>
-                {ADVANCED_STATS.topAlternatives.map((item, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/5"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="text-xs font-bold text-white/30 w-4">
-                        #{i + 1}
+                {ADVANCED_STATS.topAlternatives.map((item, i) => {
+                  // Convert count to qualitative label
+                  const getQualitativeLabel = (count) => {
+                    if (count >= 10) return "Often helpful";
+                    if (count >= 5) return "Used recently";
+                    return "A common choice";
+                  };
+                  
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/5"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="text-lg">{item.icon}</div>
+                        <div className="text-sm font-bold">{item.title}</div>
                       </div>
-                      <div className="text-lg">{item.icon}</div>
-                      <div className="text-sm font-bold">{item.title}</div>
+                      <div className="text-[10px] text-white/50 px-2 py-1 rounded-lg">
+                        {getQualitativeLabel(item.count)}
+                      </div>
                     </div>
-                    <div className="text-xs font-bold bg-white/10 px-2 py-1 rounded-lg">
-                      {item.count}x
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
